@@ -219,3 +219,9 @@ input {
   color: var(--amber);
   font-weight: 600;
 }
+
+.menu-sep {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.1);
+  margin: 4px 8px;
+}

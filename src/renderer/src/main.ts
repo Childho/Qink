@@ -24,7 +24,8 @@ const menuEl = document.getElementById('menu') as HTMLElement
 interface MenuItem {
   label: string
   checked?: boolean
-  action: () => void
+  sep?: boolean
+  action?: () => void
 }
 
 function persist(): void {
@@ -241,11 +242,16 @@ function openMenu(items: MenuItem[], x: number, y: number): void {
   menuEl.innerHTML = ''
   for (const it of items) {
     const div = document.createElement('div')
+    if (it.sep) {
+      div.className = 'menu-sep'
+      menuEl.appendChild(div)
+      continue
+    }
     div.className = 'menu-item' + (it.checked ? ' checked' : '')
-    div.textContent = it.label
+    div.textContent = (it.checked ? '✓ ' : '') + it.label
     div.addEventListener('click', () => {
       closeMenu()
-      it.action()
+      it.action?.()
     })
     menuEl.appendChild(div)
   }
@@ -266,7 +272,19 @@ function blankMenu(x: number, y: number): void {
     [
       { label: '字号 · 小', checked: size === 'small', action: () => setFontSize('small') },
       { label: '字号 · 中', checked: size === 'medium', action: () => setFontSize('medium') },
-      { label: '字号 · 大', checked: size === 'large', action: () => setFontSize('large') }
+      { label: '字号 · 大', checked: size === 'large', action: () => setFontSize('large') },
+      { label: '', sep: true },
+      {
+        label: '开机自启',
+        checked: data.settings.autostart,
+        action: () => {
+          data.settings.autostart = !data.settings.autostart
+          void window.qink.setAutostart(data.settings.autostart)
+          persist()
+        }
+      },
+      { label: '打开数据文件夹', action: () => void window.qink.openDataFolder() },
+      { label: '退出 Qink', action: () => window.qink.quit() }
     ],
     x,
     y
@@ -306,6 +324,63 @@ function wire(): void {
       render()
     }
   }, 30_000)
+
+  wireDrag()
+}
+
+/* ---------- 自绘拖动 ----------
+ * 抓住贴纸任意非交互空白处拖动。位移按 rAF 合帧上报，主进程按「按下时锚点 + 位移」
+ * 定位窗口（不累加增量，杜绝丢帧漂移）。不用 -webkit-app-region：它会吞掉鼠标事件，
+ * M7 的右键长按晃动手势就做不成。 */
+
+function wireDrag(): void {
+  let dragging = false
+  let startX = 0
+  let startY = 0
+  let pendingDx = 0
+  let pendingDy = 0
+  let rafScheduled = false
+
+  const flush = (): void => {
+    rafScheduled = false
+    if (!dragging) return
+    window.qink.dragMove(pendingDx, pendingDy)
+  }
+
+  note.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return
+    const t = e.target as HTMLElement
+    if (t.closest('input, .circle, .composer-hint, #menu, .menu-item')) return
+    dragging = true
+    startX = e.clientX
+    startY = e.clientY
+    pendingDx = 0
+    pendingDy = 0
+    window.qink.dragStart()
+    note.setPointerCapture(e.pointerId)
+  })
+
+  note.addEventListener('pointermove', (e) => {
+    if (!dragging) return
+    const dx = e.clientX - startX
+    const dy = e.clientY - startY
+    // 3px 阈值内不算拖动，让纯点击（改写目标等）不牵动窗口
+    if (Math.hypot(dx, dy) < 3) return
+    pendingDx = dx
+    pendingDy = dy
+    if (!rafScheduled) {
+      rafScheduled = true
+      requestAnimationFrame(flush)
+    }
+  })
+
+  const end = (): void => {
+    if (!dragging) return
+    dragging = false
+    window.qink.dragEnd()
+  }
+  note.addEventListener('pointerup', end)
+  note.addEventListener('pointercancel', end)
 }
 
 async function boot(): Promise<void> {
