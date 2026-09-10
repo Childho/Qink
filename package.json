@@ -12,6 +12,7 @@
     "package": "electron-vite build && electron-builder"
   },
   "devDependencies": {
+    "@types/d3-delaunay": "^6.0.4",
     "@types/node": "^22.20.2",
     "electron": "^38.8.6",
     "electron-builder": "^26.15.3",

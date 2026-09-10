@@ -1,4 +1,5 @@
 import type { QinkData } from '@shared/dates'
+import type { GlassInfo, WallpaperImage } from '@shared/glass'
 
 export {}
 
@@ -12,6 +13,10 @@ declare global {
     dragStart(): void
     dragMove(dx: number, dy: number): void
     dragEnd(): void
+    glassInfo(): Promise<GlassInfo>
+    onWallpaperChanged(cb: (w: WallpaperImage) => void): void
+    onWinPos(cb: (x: number, y: number) => void): void
+    glassReport(r: { ok: boolean; ms?: number; bytes?: number }): void
   }
 
   interface Window {

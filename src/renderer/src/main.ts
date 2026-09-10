@@ -1,5 +1,7 @@
 import type { PeriodKind, QinkData, Task } from '@shared/dates'
 import { dateKey, effectiveGoal, isRolledIn, periodKeyFor } from '@shared/dates'
+import { initGlass } from './glass'
+import { shatterRow } from './shatter'
 
 // 贴纸交互（M3）：目标引导文字与点击改写、任务添加/完成（淡出占位）/右键改删、
 // 字号三选、滚入任务琥珀橙置顶、跨午夜自动重算。
@@ -231,9 +233,8 @@ function completeTask(id: string): void {
     finish()
     return
   }
-  // M3 占位动画：淡出收起。M6 换成 Voronoi 碎裂。
-  row.classList.add('completing')
-  setTimeout(finish, 380)
+  // 玻璃碎裂（M6）：碎片落地后再归档
+  void shatterRow(note, row).then(finish)
 }
 
 /* ---------- 右键抽屉与全局 ---------- */
@@ -388,6 +389,7 @@ async function boot(): Promise<void> {
   lastDateKey = dateKey(new Date())
   render()
   wire()
+  void initGlass()
 }
 
 void boot()

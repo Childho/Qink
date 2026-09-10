@@ -1,8 +1,11 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, shell, Tray } from 'electron'
 import { join } from 'node:path'
+import os from 'node:os'
 import { getData, loadData, queueSave, setData } from './store'
+import { readWallpaper, watchWallpaper } from './wallpaper'
 import { TRAY_ICON_DATA_URL } from './tray-icon'
 import type { QinkData } from '../shared/dates'
+import type { GlassInfo } from '../shared/glass'
 
 // 常驻模型（spec.md）：贴纸可关（隐藏不销毁），托盘是找回入口与退出入口；
 // 永不置顶；单实例；开机自启由右键抽屉开关；位置记忆在主显示器工作区内。
@@ -26,6 +29,9 @@ if (!app.requestSingleInstanceLock()) {
     createWindow()
     createTray()
     wireIpc()
+    watchWallpaper((w) => {
+      win?.webContents.send('qink:wallpaper-changed', w)
+    })
   })
 
   app.on('before-quit', () => {
@@ -34,6 +40,10 @@ if (!app.requestSingleInstanceLock()) {
 
   // 托盘驻留：窗口全关不退出，退出只走托盘菜单 / 右键抽屉
   app.on('window-all-closed', () => {})
+}
+
+function isWin11(): boolean {
+  return parseInt(os.release().split('.')[2] ?? '0', 10) >= 22000
 }
 
 function createWindow(): void {
@@ -55,7 +65,19 @@ function createWindow(): void {
 
   restorePosition()
 
-  win.on('ready-to-show', () => win?.show())
+  // Win11 22H2+：官方毛玻璃（真模糊背后内容）；Win10 走壁纸采样路线（ADR-0003）
+  if (isWin11()) {
+    try {
+      win.setBackgroundMaterial('acrylic')
+    } catch {
+      // API 不可用时静默，渲染层会走采样/降级
+    }
+  }
+
+  win.on('ready-to-show', () => {
+    win?.show()
+    forwardPos() // 初始位置喂给玻璃层
+  })
 
   // 关闭 = 隐藏进托盘；真正退出由 isQuitting 放行
   win.on('close', (e) => {
@@ -66,7 +88,10 @@ function createWindow(): void {
   })
 
   // 'move'（含程序化 setPosition）与 'moved' 都挂：保存幂等，queueSave 防抖合并
-  win.on('move', savePosition)
+  win.on('move', () => {
+    savePosition()
+    forwardPos()
+  })
   win.on('moved', savePosition)
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -83,6 +108,18 @@ function savePosition(): void {
   d.settings.noteX = x
   d.settings.noteY = y
   queueSave()
+}
+
+let lastPosSend = 0
+
+/** 窗口位置转发给渲染层的玻璃平移（16ms 节流，拖动时帧级跟随） */
+function forwardPos(): void {
+  if (!win) return
+  const now = Date.now()
+  if (now - lastPosSend < 16) return
+  lastPosSend = now
+  const [x, y] = win.getPosition()
+  win.webContents.send('qink:win-pos', x, y)
 }
 
 /** 只在主显示器工作区内恢复，防止窗口丢在已拔掉的屏幕外 */
@@ -158,5 +195,25 @@ function wireIpc(): void {
   ipcMain.on('qink:drag-end', () => {
     dragAnchor = null
     savePosition()
+  })
+
+  ipcMain.handle('qink:glass-info', async (): Promise<GlassInfo> => {
+    const primary = screen.getPrimaryDisplay()
+    const [winX, winY] = win ? win.getPosition() : [0, 0]
+    const wp = await readWallpaper()
+    return {
+      ...wp,
+      win11: isWin11(),
+      screenW: primary.bounds.width,
+      screenH: primary.bounds.height,
+      originX: primary.bounds.x,
+      originY: primary.bounds.y,
+      winX,
+      winY
+    }
+  })
+
+  ipcMain.on('qink:glass-report', (_e, r: { ok: boolean; ms?: number; bytes?: number }) => {
+    console.log(`[qink] 玻璃采样 ${r.ok ? `成功 ${r.ms}ms ${r.bytes}B` : '失败 → 降级纯半透明'}`)
   })
 }
