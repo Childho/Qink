@@ -2,6 +2,8 @@ import type { PeriodKind, QinkData, Task } from '@shared/dates'
 import { dateKey, effectiveGoal, isRolledIn, periodKeyFor } from '@shared/dates'
 import { initGlass } from './glass'
 import { shatterRow } from './shatter'
+import { createArchiveView } from './archive'
+import type { ArchiveHandle } from './archive'
 
 // 贴纸交互（M3）：目标引导文字与点击改写、任务添加/完成（淡出占位）/右键改删、
 // 字号三选、滚入任务琥珀橙置顶、跨午夜自动重算。
@@ -17,6 +19,8 @@ const GOAL_ORDER: PeriodKind[] = ['quarter', 'month', 'week']
 let data: QinkData
 let lastDateKey = ''
 let composerOpen = false
+let archive: ArchiveHandle | null = null
+let gestureFiredAt = 0
 
 const note = document.getElementById('note') as HTMLElement
 const goalsEl = document.querySelector('.goals') as HTMLElement
@@ -297,9 +301,32 @@ function setFontSize(size: QinkData['settings']['fontSize']): void {
   persist()
 }
 
+function openArchive(): void {
+  if (archive?.isOpen()) return
+  gestureFiredAt = Date.now()
+  archive = createArchiveView({
+    note,
+    scrollEl: tasksEl,
+    entriesFor: (k) =>
+      data.archive
+        .filter((a) => dateKey(new Date(a.completedAt)) === k)
+        .sort((a, b) => a.completedAt.localeCompare(b.completedAt)),
+    onRestore: (id) => {
+      // 修复：从档案消失，作为未完成任务回到今日（滚入琥珀橙由创建日如实推导）
+      const idx = data.archive.findIndex((a) => a.id === id)
+      if (idx === -1) return
+      const [a] = data.archive.splice(idx, 1)
+      data.tasks.push({ id: a.id, text: a.text, createdAt: a.createdAt })
+      persist()
+    }
+  })
+  archive.open()
+}
+
 function wire(): void {
   document.addEventListener('contextmenu', (e) => {
     e.preventDefault() // 原生菜单全禁：自绘菜单（M7 手势也依赖此设定）
+    if (Date.now() - gestureFiredAt < 600) return // 手势刚触发过，不开菜单
     const target = e.target as HTMLElement
     if (target.closest('.task') || target.closest('.goal-input') || target.closest('.task-input')) {
       return // 任务右键已在行上处理；输入框内不弹菜单
@@ -309,12 +336,46 @@ function wire(): void {
 
   document.addEventListener('click', (e) => {
     closeMenu()
+    if (archive?.isOpen()) return // 清单打开时不开输入行
     const target = e.target as HTMLElement
     // 点击任务区空白或提示行 = 打开输入（spec：点击空白处添加任务）
     if (target.closest('.composer-hint') || (target === tasksEl && !composerOpen)) {
       composerOpen = true
       render()
     }
+  })
+
+  // 招牌手势：任务区空白处按住右键 ~300ms 并轻轻晃动 → 已完成清单（碎片合并）
+  const HOLD_MS = 300
+  const WIGGLE_PATH_PX = 26
+  let gTracking = false
+  tasksEl.addEventListener('pointerdown', (e) => {
+    if (e.button !== 2) return
+    const t = e.target as HTMLElement
+    if (t.closest('.task, input, .composer-hint')) return // 只在空白处生效
+    gTracking = true
+    const downAt = Date.now()
+    let path = 0
+    let lastX = e.clientX
+    let lastY = e.clientY
+    let fired = false
+    const move = (ev: PointerEvent): void => {
+      if (!gTracking) return
+      path += Math.hypot(ev.clientX - lastX, ev.clientY - lastY)
+      lastX = ev.clientX
+      lastY = ev.clientY
+      if (!fired && Date.now() - downAt >= HOLD_MS && path > WIGGLE_PATH_PX) {
+        fired = true
+        openArchive()
+      }
+    }
+    const up = (): void => {
+      gTracking = false
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
   })
 
   // 跨午夜自动翻篇（30 秒对一次表，零定时器清空，渲染时按周期键推导）
