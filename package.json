@@ -1,0 +1,26 @@
+{
+  "name": "qink",
+  "version": "0.1.0",
+  "description": "A frosted-glass sticky note for your desktop — goals above, today's tasks below.",
+  "private": true,
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "package": "electron-vite build && electron-builder"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "electron": "^38.8.6",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.6",
+    "vitest": "^5.0.0"
+  },
+  "dependencies": {
+    "d3-delaunay": "^6.0.4"
+  }
+}

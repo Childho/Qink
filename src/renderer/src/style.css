@@ -1,0 +1,73 @@
+/* M1 空壳：纯半透明白卡片。M5 换成壁纸预模糊的毛玻璃层。 */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: transparent;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+  user-select: none;
+}
+
+#note {
+  height: 100%;
+  padding: 20px 18px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  color: #2c2c2e;
+  display: flex;
+  flex-direction: column;
+}
+
+.goals {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.goal {
+  font-size: 13px;
+  line-height: 1.5;
+  min-height: 20px;
+}
+
+.divider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.1);
+  margin: 14px 0;
+}
+
+.tasks {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.circle {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid rgba(0, 0, 0, 0.35);
+  border-radius: 50%;
+  flex: none;
+}
+
+/* ghost = 占位示意（引导文字 / 布局校验），非交互态 */
+.ghost {
+  opacity: 0.38;
+}
