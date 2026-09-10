@@ -189,7 +189,13 @@ function wireIpc(): void {
 
   ipcMain.on('qink:drag-move', (_e, dx: number, dy: number) => {
     if (!win || !dragAnchor) return
-    win.setPosition(Math.round(dragAnchor.x + dx), Math.round(dragAnchor.y + dy))
+    let x = Math.round(dragAnchor.x + dx)
+    let y = Math.round(dragAnchor.y + dy)
+    // 只在主显示器工作区内活动（spec；玻璃采样也以主屏为基准）
+    const wa = screen.getPrimaryDisplay().workArea
+    x = Math.min(Math.max(x, wa.x), wa.x + wa.width - 320)
+    y = Math.min(Math.max(y, wa.y), wa.y + wa.height - 200)
+    win.setPosition(x, y)
   })
 
   ipcMain.on('qink:drag-end', () => {
