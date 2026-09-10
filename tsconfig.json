@@ -10,6 +10,9 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
+    "paths": {
+      "@shared/*": ["./src/shared/*"]
+    },
     "types": ["node"]
   },
   "include": ["src", "tests", "electron.vite.config.ts"]

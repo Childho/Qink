@@ -1,4 +1,4 @@
-/* M1 空壳：纯半透明白卡片。M5 换成壁纸预模糊的毛玻璃层。 */
+/* M3 真实样式：半透明白卡（M5 换壁纸预模糊玻璃）、季月周层级、琥珀橙滚入、右键抽屉菜单 */
 
 * {
   margin: 0;
@@ -13,36 +13,75 @@ body {
   overflow: hidden;
   font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
   user-select: none;
+  -webkit-font-smoothing: antialiased;
 }
 
 #note {
+  --fs: 13px;
+  --amber: #d97706;
+  --amber-text: #92400e;
   height: 100%;
-  padding: 20px 18px;
+  padding: 20px 18px 16px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.58);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
   color: #2c2c2e;
   display: flex;
   flex-direction: column;
 }
 
+#note[data-size='small'] {
+  --fs: 12px;
+}
+#note[data-size='large'] {
+  --fs: 15px;
+}
+
+/* ---------- 目标区：季 > 月 > 周 的轻微层级 ---------- */
+
 .goals {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 11px;
 }
 
 .goal {
-  font-size: 13px;
-  line-height: 1.5;
-  min-height: 20px;
+  font-size: var(--fs);
+  line-height: 1.55;
+  cursor: text;
+  min-height: 1.55em;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.goal[data-kind='quarter'] {
+  font-size: calc(var(--fs) * 1.12);
+  font-weight: 600;
+}
+.goal[data-kind='month'] {
+  font-weight: 500;
+}
+
+.plabel {
+  font-size: 0.62em;
+  opacity: 0.32;
+  flex: none;
+  font-weight: 400;
+}
+
+.goal.ghost {
+  opacity: 0.38;
 }
 
 .divider {
   height: 1px;
   background: rgba(0, 0, 0, 0.1);
-  margin: 14px 0;
+  margin: 14px 0 12px;
+  flex: none;
 }
+
+/* ---------- 任务区 ---------- */
 
 .tasks {
   flex: 1;
@@ -50,13 +89,39 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding-right: 4px;
+}
+
+.tasks::-webkit-scrollbar {
+  width: 4px;
+}
+.tasks::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 2px;
 }
 
 .task {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 13px;
+  font-size: var(--fs);
+  line-height: 1.5;
+  max-height: 60px;
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    opacity 0.36s ease,
+    transform 0.36s ease,
+    max-height 0.36s ease,
+    margin 0.36s ease,
+    gap 0.36s ease;
+  overflow: hidden;
+}
+
+.task.completing {
+  opacity: 0;
+  transform: translateX(8px);
+  max-height: 0;
 }
 
 .circle {
@@ -65,9 +130,92 @@ body {
   border: 1.5px solid rgba(0, 0, 0, 0.35);
   border-radius: 50%;
   flex: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
 }
 
-/* ghost = 占位示意（引导文字 / 布局校验），非交互态 */
-.ghost {
-  opacity: 0.38;
+.circle:hover {
+  border-color: rgba(0, 0, 0, 0.7);
+}
+
+.text {
+  flex: 1;
+  word-break: break-all;
+}
+
+/* 滚入任务：琥珀橙（两档制的第二档，不按天数分级） */
+.task.rolled .circle {
+  border-color: var(--amber);
+}
+.task.rolled .text {
+  color: var(--amber-text);
+}
+
+/* ---------- 输入行（目标改写 / 任务改写 / 连续添加） ---------- */
+
+input {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  outline: none;
+  user-select: text;
+  width: 100%;
+}
+
+.goal-input {
+  font-weight: inherit;
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.22);
+  padding-bottom: 1px;
+}
+
+.task-input {
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.22);
+}
+
+.composer {
+  font-size: var(--fs);
+}
+
+.composer::placeholder,
+.task-input,
+.goal-input {
+  color: inherit;
+}
+
+.composer-hint {
+  font-size: var(--fs);
+  opacity: 0.34;
+  cursor: text;
+  padding-left: 22px; /* 与任务文字对齐 */
+}
+
+/* ---------- 右键抽屉菜单 ---------- */
+
+#menu {
+  position: fixed;
+  z-index: 10;
+  min-width: 120px;
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 8px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
+  padding: 4px;
+  backdrop-filter: blur(8px);
+}
+
+.menu-item {
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: #2c2c2e;
+}
+
+.menu-item:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.menu-item.checked {
+  color: var(--amber);
+  font-weight: 600;
 }

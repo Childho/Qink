@@ -36,6 +36,12 @@ export function getData(): QinkData {
   return cache
 }
 
+/** 渲染层是状态源：每次变更发全量数据过来，主进程负责落盘。 */
+export function setData(next: QinkData): void {
+  cache = { ...defaultData(), ...next }
+  queueSave()
+}
+
 /** 防抖保存：高频操作（打字、拖动松手）合并成一次落盘。 */
 export function queueSave(): void {
   if (saveTimer) clearTimeout(saveTimer)

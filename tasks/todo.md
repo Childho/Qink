@@ -5,26 +5,27 @@
 
 ## M1 脚手架与空壳
 
-- [ ] electron-vite 5 + TypeScript 项目结构（main / preload / renderer / shared）
-- [ ] 依赖安装：electron、electron-vite、vite 7、typescript、vitest、electron-builder、d3-delaunay
-- [ ] 无边框透明窗口创建并显示（永不置顶、不占任务栏）
-- [ ] git init + 首次提交
-- **验收**：`npm run dev` 启动后桌面上出现半透明白色贴纸空壳
+- [x] electron-vite 5 + TypeScript 项目结构（main / preload / renderer / shared）
+- [x] 依赖安装：electron 38.8.6、electron-vite 5、vite 7.3.6、typescript 7、vitest 5、electron-builder 26、d3-delaunay 6
+- [x] 无边框透明窗口创建并显示（永不置顶、不占任务栏）
+- [x] git init + 首次提交
+- **验收**：✅ 通过——dev 启动正常，截图确认半透明贴纸空壳显示、中文渲染无乱码
 
 ## M2 数据与日期引擎
 
-- [ ] `src/shared/dates.ts`：本地日期键、季/月/周周期键（ISO 周一起始）、滚入判定、拖延天数、目标过期推导
-- [ ] `src/main/store.ts`：data.json 读写（文档目录、防抖保存、版本字段）
-- [ ] vitest 单测：周期边界（年末跨季、ISO 周归属）、午夜翻篇、跨周期目标失效、修复年龄
-- **验收**：`npm test` 全绿
+- [x] `src/shared/dates.ts`：本地日期键、季/月/周周期键（ISO 周一起始）、滚入判定、拖延天数、目标过期推导
+- [x] `src/main/store.ts`：data.json 读写（文档目录、防抖保存、版本字段）
+- [x] vitest 单测：11 例全绿（年末跨季、ISO 周归属 2026-W53、午夜滚入、跨月目标失效、修复年龄）
+- **验收**：✅ `npm test` 11/11 通过
 
 ## M3 贴纸骨架
 
-- [ ] 目标区：引导文字、点击书写/改写、周期更替自动失效
-- [ ] 任务区：点击空白输入、回车连续添加、Esc 结束、圆圈完成（暂用淡出占位）、右键改写/删除
-- [ ] 滚入任务琥珀橙 + 排在上方
-- [ ] 字号三选（右键抽屉）、字体与配色
-- **验收**：写目标、加任务、完成任务三动作实际走通
+- [x] 目标区：引导文字、点击书写/改写（Enter 保存 / Esc 放弃 / 失焦保存）、周期更替自动失效
+- [x] 任务区：点击空白输入、回车连续添加、Esc 结束、圆圈完成（淡出占位）、右键改写/删除
+- [x] 滚入任务琥珀橙 + 排在上方
+- [x] 字号三选（右键抽屉）、字体与配色、季月周字重层级
+- [x] 跨午夜 30 秒对表自动重算
+- **验收**：✅ 实机三动作走通——写入季目标「发布 Qink 第一版」（实色显示+周期键落盘）；连续添加「写周报」「review PR」（输入框保持待命）；点圆圈完成「写周报」（淡出归档）；data.json 端到端核对正确
 
 ## M4 常驻能力
 

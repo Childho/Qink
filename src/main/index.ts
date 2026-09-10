@@ -1,6 +1,7 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'node:path'
-import { loadData } from './store'
+import { getData, loadData, setData } from './store'
+import type { QinkData } from '../shared/dates'
 
 // 贴纸窗口：无边框 + 透明（Win10 透明必须无边框，调研已确认）。
 // 永不置顶、不占任务栏——安静地待在桌面上（spec.md 常驻行为）。
@@ -35,6 +36,10 @@ function createWindow(): BrowserWindow {
 
 app.whenReady().then(() => {
   void loadData()
+  ipcMain.handle('qink:data:get', () => getData())
+  ipcMain.handle('qink:data:set', (_e, incoming: QinkData) => {
+    setData(incoming)
+  })
   createWindow()
 })
 
