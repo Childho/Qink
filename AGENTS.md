@@ -1,5 +1,16 @@
 # AGENTS.md
 
+## 本项目：Qink
+
+一张常驻 Windows 桌面的毛玻璃便利贴：季/月/周核心目标 + 今日任务（碎裂完成、滚入琥珀橙、已完成清单手势）。规格见 `.scratch/qink-phase1/spec.md`，术语见 `CONTEXT.md`，重大决策见 `docs/adr/`。
+
+- 常用命令：`npm run dev`（开发）· `npm test`（vitest）· `npm run typecheck` · `npm run package`（打包；本机网络需带 `ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/`）
+- 技术栈：Electron 38 + electron-vite 5 + TypeScript，原生 DOM 无前端框架；d3-delaunay 做碎裂几何
+- 目录：`src/main`（窗口/托盘/数据/壁纸）· `src/preload`（IPC 桥）· `src/renderer`（UI/手势/动画）· `src/shared`（纯逻辑，单测覆盖）· `tests/`
+- 数据：`文档\Qink\data.json`（AppData 留备份双写）
+- 注意：改主进程/preload 必须完全重启 dev——electron-vite 只对渲染层热更新
+- 当前状态：第一阶段（M1–M9）已交付装机；第二阶段（MCP）未开始
+
 ## 回答风格要求
 
 所有解释和代码注释都遵循以下风格：
