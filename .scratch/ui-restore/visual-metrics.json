@@ -1,0 +1,14 @@
+{
+  "note_rgb_mean_absolute_error": 0.4031162464985994,
+  "channel_range": 255,
+  "note_crop_physical_pixels": [
+    62,
+    44,
+    414,
+    639
+  ],
+  "note_css_size": [
+    320,
+    540
+  ]
+}

@@ -1,3 +1,5 @@
+import './style.css'
+import { NOTE_INSET_X, NOTE_INSET_Y } from '@shared/window'
 import type { PeriodKind, QinkData, Task } from '@shared/dates'
 import { dateKey, effectiveGoal, isRolledIn, periodKeyFor } from '@shared/dates'
 import { initGlass } from './glass'
@@ -19,6 +21,9 @@ const GOAL_ORDER: PeriodKind[] = ['quarter', 'month', 'week']
 let data: QinkData
 let lastDateKey = ''
 let composerOpen = false
+let composerDraft = ''
+const completing = new Set<string>()
+let suppressClick = false
 let archive: ArchiveHandle | null = null
 let gestureFiredAt = 0
 
@@ -26,6 +31,9 @@ const note = document.getElementById('note') as HTMLElement
 const goalsEl = document.querySelector('.goals') as HTMLElement
 const tasksEl = document.querySelector('.tasks') as HTMLElement
 const menuEl = document.getElementById('menu') as HTMLElement
+note.style.setProperty('--note-inset-x', `${NOTE_INSET_X}px`)
+note.style.setProperty('--note-inset-y', `${NOTE_INSET_Y}px`)
+menuEl.setAttribute('role', 'menu')
 
 interface MenuItem {
   label: string
@@ -36,13 +44,12 @@ interface MenuItem {
 
 function persist(): void {
   void window.qink.setData(data)
-  render()
 }
 
 function render(): void {
   note.dataset.size = data.settings.fontSize
-  renderGoals()
-  renderTasks()
+  if (!goalsEl.querySelector('input')) renderGoals()
+  if (!archive?.isOpen() && !tasksEl.querySelector('input')) renderTasks()
 }
 
 /* ---------- 目标区 ---------- */
@@ -62,39 +69,56 @@ function renderGoals(): void {
     span.className = 'gtext'
     span.textContent = text ?? GUIDE[kind]
     row.append(label, span)
+    row.tabIndex = 0
+    row.setAttribute('role', 'button')
+    row.setAttribute('aria-label', `改写${PERIOD_LABEL[kind]}核心目标：${text ?? GUIDE[kind]}`)
     row.addEventListener('click', () => startGoalEdit(kind))
+    row.addEventListener('keydown', (e) => {
+      if (e.target === row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); startGoalEdit(kind) }
+    })
     goalsEl.appendChild(row)
   }
 }
 
 function startGoalEdit(kind: PeriodKind): void {
   const row = goalsEl.children[GOAL_ORDER.indexOf(kind)] as HTMLElement | undefined
-  if (!row) return
+  if (!row || row.querySelector('input')) return
   const current = effectiveGoal(data.goals[kind], kind, new Date()) ?? ''
 
   const input = document.createElement('input')
   input.className = 'goal-input'
   input.value = current
   input.placeholder = GUIDE[kind]
-  row.innerHTML = ''
-  row.appendChild(input)
+  input.setAttribute('aria-label', `改写${PERIOD_LABEL[kind]}核心目标`)
+  row.classList.remove('ghost')
+  const span = row.querySelector('.gtext') as HTMLElement
+  span.replaceWith(input)
   input.focus()
   input.select()
 
   let finished = false
+  const restoreRow = (): void => {
+    const text = effectiveGoal(data.goals[kind], kind, new Date())
+    span.textContent = text ?? GUIDE[kind]
+    row.classList.toggle('ghost', !text)
+    row.setAttribute('aria-label', `改写${PERIOD_LABEL[kind]}核心目标：${span.textContent}`)
+    input.replaceWith(span)
+  }
   const commit = (): void => {
     if (finished) return
     finished = true
     const text = input.value.trim()
     data.goals[kind] = text ? { periodKey: periodKeyFor(kind, new Date()), text } : null
     persist()
+    restoreRow()
   }
   input.addEventListener('keydown', (e) => {
     e.stopPropagation()
+    if (e.isComposing || e.keyCode === 229) return
     if (e.key === 'Enter') commit()
     else if (e.key === 'Escape') {
       finished = true // 放弃修改：不算保存
-      render()
+      restoreRow()
     }
   })
   // 点别处（失焦）= 保存，温和不做丢弃确认
@@ -114,44 +138,71 @@ function orderedTasks(): Task[] {
 }
 
 function renderTasks(): void {
+  if (archive?.isOpen()) return
+  const scrollTop = tasksEl.scrollTop
   tasksEl.innerHTML = ''
   for (const t of orderedTasks()) {
-    tasksEl.appendChild(taskRow(t))
+    if (!completing.has(t.id)) tasksEl.appendChild(taskRow(t))
   }
 
   if (composerOpen) {
     const composer = document.createElement('input')
     composer.className = 'composer'
-    composer.placeholder = '做完一条按回车，继续输入下一条…'
+    composer.placeholder = '回车添加，继续写下一件事…'
+    composer.value = composerDraft
+    composer.setAttribute('aria-label', '新增今日任务')
+    composer.addEventListener('input', () => { composerDraft = composer.value })
     composer.addEventListener('keydown', (e) => {
       e.stopPropagation()
+      if (e.isComposing || e.keyCode === 229) return
       if (e.key === 'Enter') {
         const text = composer.value.trim()
         if (text) {
-          data.tasks.push({ id: crypto.randomUUID(), text, createdAt: new Date().toISOString() })
-          persist()
-          return // persist 会重渲染并重建输入框，保持连续输入
+          const t = { id: crypto.randomUUID(), text, createdAt: new Date().toISOString() }
+          data.tasks.push(t)
+          void window.qink.setData(data) // 原位插入不整区重建，落盘单独触发
+          tasksEl.insertBefore(taskRow(t), composer) // 焦点原位保留（避免拆卸重建导致焦点重置）
+          composer.value = ''
+          composerDraft = ''
+          composer.scrollIntoView({ block: 'nearest' })
+          return
         }
         composerOpen = false
-        render()
+        renderTasks()
       } else if (e.key === 'Escape') {
         composerOpen = false
-        render()
+        renderTasks()
       }
     })
     composer.addEventListener('blur', () => {
-      // 点到别处：轻轻收起输入行
+      if (!composer.isConnected) return
+      composerDraft = composer.value
       composerOpen = false
-      render()
+      // 只替换输入行，不销毁用户刚点中的任务或目标。
+      composer.replaceWith(composerHint())
     })
     tasksEl.appendChild(composer)
     composer.focus()
   } else {
-    const hint = document.createElement('div')
-    hint.className = 'composer-hint'
-    hint.textContent = '点击这里写下今天的事…'
-    tasksEl.appendChild(hint)
+    tasksEl.appendChild(composerHint())
   }
+  tasksEl.scrollTop = scrollTop
+}
+
+function composerHint(): HTMLElement {
+  const hint = document.createElement('div')
+  hint.className = 'composer-hint'
+  hint.textContent = composerDraft ? '继续写下刚才的事…' : '点击这里写下今天的事…'
+  hint.tabIndex = 0
+  hint.setAttribute('role', 'button')
+  hint.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      composerOpen = true
+      renderTasks()
+    }
+  })
+  return hint
 }
 
 function taskRow(t: Task): HTMLElement {
@@ -159,8 +210,11 @@ function taskRow(t: Task): HTMLElement {
   row.className = 'task' + (isRolledIn(t.createdAt, new Date()) ? ' rolled' : '')
   row.dataset.id = t.id
 
-  const circle = document.createElement('span')
+  const circle = document.createElement('button')
   circle.className = 'circle'
+  circle.type = 'button'
+  circle.setAttribute('aria-label', `完成：${t.text}`)
+  circle.title = '完成任务'
   circle.addEventListener('click', (e) => {
     e.stopPropagation()
     completeTask(t.id)
@@ -169,6 +223,8 @@ function taskRow(t: Task): HTMLElement {
   const text = document.createElement('span')
   text.className = 'text'
   text.textContent = t.text
+  text.title = '双击改写 · 右键更多操作'
+  text.addEventListener('dblclick', () => startTaskEdit(t.id))
 
   row.append(circle, text)
 
@@ -191,11 +247,12 @@ function taskRow(t: Task): HTMLElement {
 function startTaskEdit(id: string): void {
   const row = tasksEl.querySelector(`[data-id="${id}"]`) as HTMLElement | null
   const task = data.tasks.find((t) => t.id === id)
-  if (!row || !task) return
+  if (!row || !task || completing.has(id) || row.querySelector('input')) return
   const span = row.querySelector('.text') as HTMLElement
   const input = document.createElement('input')
   input.className = 'task-input'
   input.value = task.text
+  input.setAttribute('aria-label', '改写任务')
   span.replaceWith(input)
   input.focus()
   input.select()
@@ -207,36 +264,49 @@ function startTaskEdit(id: string): void {
     const text = input.value.trim()
     if (text) task.text = text
     persist()
+    span.textContent = task.text
+    input.replaceWith(span)
+    row.querySelector('button')?.setAttribute('aria-label', `完成：${task.text}`)
   }
   input.addEventListener('keydown', (e) => {
     e.stopPropagation()
+    if (e.isComposing || e.keyCode === 229) return
     if (e.key === 'Enter') commit()
     else if (e.key === 'Escape') {
       finished = true
-      render()
+      input.replaceWith(span)
     }
   })
   input.addEventListener('blur', commit)
 }
 
 function deleteTask(id: string): void {
+  if (completing.has(id)) return
   data.tasks = data.tasks.filter((t) => t.id !== id)
   persist()
+  renderTasks()
 }
 
 function completeTask(id: string): void {
+  if (completing.has(id)) return
+  completing.add(id)
   const row = tasksEl.querySelector(`[data-id="${id}"]`) as HTMLElement | null
   const finish = (): void => {
+    completing.delete(id)
     const idx = data.tasks.findIndex((t) => t.id === id)
     if (idx === -1) return
     const [t] = data.tasks.splice(idx, 1)
     data.archive.push({ ...t, completedAt: new Date().toISOString() })
     persist()
+    row?.remove()
   }
   if (!row) {
     finish()
     return
   }
+  const button = row.querySelector('button')
+  if (button) button.disabled = true
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { finish(); return }
   // 玻璃碎裂（M6）：碎片落地后再归档
   void shatterRow(note, row).then(finish)
 }
@@ -246,15 +316,17 @@ function completeTask(id: string): void {
 function openMenu(items: MenuItem[], x: number, y: number): void {
   menuEl.innerHTML = ''
   for (const it of items) {
-    const div = document.createElement('div')
+    const div = document.createElement(it.sep ? 'div' : 'button')
     if (it.sep) {
       div.className = 'menu-sep'
       menuEl.appendChild(div)
       continue
     }
+    div.setAttribute('role', 'menuitem')
     div.className = 'menu-item' + (it.checked ? ' checked' : '')
     div.textContent = (it.checked ? '✓ ' : '') + it.label
-    div.addEventListener('click', () => {
+    div.addEventListener('click', (e) => {
+      e.stopPropagation()
       closeMenu()
       it.action?.()
     })
@@ -265,6 +337,7 @@ function openMenu(items: MenuItem[], x: number, y: number): void {
   const clampY = Math.min(y, window.innerHeight - menuEl.offsetHeight - 4)
   menuEl.style.left = Math.max(0, clampX) + 'px'
   menuEl.style.top = Math.max(0, clampY) + 'px'
+  menuEl.querySelector<HTMLElement>('.menu-item')?.focus()
 }
 
 function closeMenu(): void {
@@ -275,6 +348,8 @@ function blankMenu(x: number, y: number): void {
   const size = data.settings.fontSize
   openMenu(
     [
+      { label: '已完成清单', action: openArchive },
+      { label: '', sep: true },
       { label: '字号 · 小', checked: size === 'small', action: () => setFontSize('small') },
       { label: '字号 · 中', checked: size === 'medium', action: () => setFontSize('medium') },
       { label: '字号 · 大', checked: size === 'large', action: () => setFontSize('large') },
@@ -299,10 +374,12 @@ function blankMenu(x: number, y: number): void {
 function setFontSize(size: QinkData['settings']['fontSize']): void {
   data.settings.fontSize = size
   persist()
+  note.dataset.size = size
 }
 
 function openArchive(): void {
   if (archive?.isOpen()) return
+  closeMenu()
   gestureFiredAt = Date.now()
   archive = createArchiveView({
     note,
@@ -311,6 +388,7 @@ function openArchive(): void {
       data.archive
         .filter((a) => dateKey(new Date(a.completedAt)) === k)
         .sort((a, b) => a.completedAt.localeCompare(b.completedAt)),
+    onClose: () => { renderTasks() },
     onRestore: (id) => {
       // 修复：从档案消失，作为未完成任务回到今日（滚入琥珀橙由创建日如实推导）
       const idx = data.archive.findIndex((a) => a.id === id)
@@ -324,11 +402,39 @@ function openArchive(): void {
 }
 
 function wire(): void {
+  document.addEventListener('click', (e) => {
+    if (!suppressClick) return
+    suppressClick = false
+    e.preventDefault()
+    e.stopImmediatePropagation()
+  }, true)
+  document.addEventListener('keydown', (e) => {
+    if (!menuEl.hidden) {
+      const items = Array.from(menuEl.querySelectorAll<HTMLElement>('.menu-item'))
+      const i = items.indexOf(document.activeElement as HTMLElement)
+      if (e.key === 'Escape') { closeMenu(); e.preventDefault(); e.stopImmediatePropagation() }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
+      }
+    } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'h') {
+      e.preventDefault()
+      if (archive?.isOpen()) archive.close()
+      else openArchive()
+    }
+  })
+  let ignored = false
+  document.addEventListener('pointermove', (e) => {
+    if (e.buttons) return
+    const target = e.target as Element
+    const next = !target.closest('#note, #menu')
+    if (next !== ignored) { ignored = next; window.qink.ignoreMouse(next) }
+  })
   document.addEventListener('contextmenu', (e) => {
     e.preventDefault() // 原生菜单全禁：自绘菜单（M7 手势也依赖此设定）
     if (Date.now() - gestureFiredAt < 600) return // 手势刚触发过，不开菜单
     const target = e.target as HTMLElement
-    if (target.closest('.task') || target.closest('.goal-input') || target.closest('.task-input')) {
+    if (!target.closest('#note') || target.closest('.task, input, .archive')) {
       return // 任务右键已在行上处理；输入框内不弹菜单
     }
     blankMenu(e.clientX, e.clientY)
@@ -341,7 +447,7 @@ function wire(): void {
     // 点击任务区空白或提示行 = 打开输入（spec：点击空白处添加任务）
     if (target.closest('.composer-hint') || (target === tasksEl && !composerOpen)) {
       composerOpen = true
-      render()
+      renderTasks()
     }
   })
 
@@ -396,53 +502,54 @@ function wire(): void {
  * M7 的右键长按晃动手势就做不成。 */
 
 function wireDrag(): void {
+  let tracking = false
   let dragging = false
   let startX = 0
   let startY = 0
   let pendingDx = 0
   let pendingDy = 0
-  let rafScheduled = false
-
+  let raf = 0
   const flush = (): void => {
-    rafScheduled = false
-    if (!dragging) return
-    window.qink.dragMove(pendingDx, pendingDy)
+    raf = 0
+    if (dragging) window.qink.dragMove(pendingDx, pendingDy)
   }
-
   note.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return
-    const t = e.target as HTMLElement
-    if (t.closest('input, .circle, .composer-hint, #menu, .menu-item')) return
-    dragging = true
-    startX = e.clientX
-    startY = e.clientY
-    pendingDx = 0
-    pendingDy = 0
-    window.qink.dragStart()
-    note.setPointerCapture(e.pointerId)
-  })
-
-  note.addEventListener('pointermove', (e) => {
-    if (!dragging) return
-    const dx = e.clientX - startX
-    const dy = e.clientY - startY
-    // 3px 阈值内不算拖动，让纯点击（改写目标等）不牵动窗口
-    if (Math.hypot(dx, dy) < 3) return
-    pendingDx = dx
-    pendingDy = dy
-    if (!rafScheduled) {
-      rafScheduled = true
-      requestAnimationFrame(flush)
-    }
-  })
-
-  const end = (): void => {
-    if (!dragging) return
+    if (e.button !== 0 || (e.target as Element).closest('input, button, .composer-hint, .archive')) return
+    tracking = true
     dragging = false
-    window.qink.dragEnd()
+    startX = e.screenX
+    startY = e.screenY
+  })
+  window.addEventListener('pointermove', (e) => {
+    if (!tracking) return
+    pendingDx = e.screenX - startX
+    pendingDy = e.screenY - startY
+    if (!dragging) {
+      if (Math.hypot(pendingDx, pendingDy) < 4) return
+      dragging = true
+      note.classList.add('dragging')
+      window.qink.dragStart()
+      note.setPointerCapture(e.pointerId)
+    }
+    if (!raf) raf = requestAnimationFrame(flush)
+  })
+  const end = (e?: PointerEvent): void => {
+    if (!tracking) return
+    tracking = false
+    if (raf) { cancelAnimationFrame(raf); raf = 0 }
+    if (dragging) {
+      flush()
+      suppressClick = true
+      setTimeout(() => { suppressClick = false }, 0)
+      window.qink.dragEnd()
+    }
+    dragging = false
+    note.classList.remove('dragging')
+    if (e && note.hasPointerCapture(e.pointerId)) note.releasePointerCapture(e.pointerId)
   }
-  note.addEventListener('pointerup', end)
-  note.addEventListener('pointercancel', end)
+  window.addEventListener('pointerup', end)
+  window.addEventListener('pointercancel', end)
+  window.addEventListener('blur', () => end())
 }
 
 async function boot(): Promise<void> {

@@ -1,6 +1,6 @@
 import type { ArchivedTask } from '@shared/dates'
 import { dateKey } from '@shared/dates'
-import { crackSVG, voronoiCells } from './shatter'
+import { crackLines, crackSVG, glassCells } from './shatter'
 
 // 已完成清单（spec.md 招牌交互）：碎片合并成仍带裂纹的任务条，任务区暂时隐藏。
 // 滚轮逐日往前翻；双击修复（裂纹淡出，任务回到今日）；点别处/Esc 反向碎开退出。
@@ -26,6 +26,7 @@ export interface ArchiveOptions {
   scrollEl: HTMLElement
   entriesFor: (dayKey: string) => ArchivedTask[]
   onRestore: (id: string) => void
+  onClose?: () => void
 }
 
 export interface ArchiveHandle {
@@ -39,6 +40,11 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
   let open_ = false
   let container: HTMLElement | null = null
   let animating = false
+  let closing = false
+  let closeRequested = false
+  let lastWheel = 0
+  const restoring = new Set<string>()
+  const reducedMotion = (): boolean => window.matchMedia('(prefers-reduced-motion: reduce)').matches
   let viewing = dateKey(new Date())
   const todayKey = (): string => dateKey(new Date())
 
@@ -48,13 +54,29 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
     close()
   }
   const onKey = (e: KeyboardEvent): void => {
-    if (!open_ || animating) return
-    if (e.key === 'Escape') close()
+    if (!open_) return
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      close()
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault()
+      changeDay(e.key === 'ArrowLeft' ? -1 : 1)
+    }
   }
   const onWheel = (e: WheelEvent): void => {
-    if (!open_ || animating) return
+    if (!open_ || e.deltaY === 0) return
+    if (!e.altKey && scrollEl.scrollHeight > scrollEl.clientHeight + 1) return
     e.preventDefault()
+    const now = performance.now()
+    const previous = lastWheel
+    lastWheel = now
+    if (animating || restoring.size > 0 || now - previous < 280) return
     const delta = e.deltaY < 0 ? -1 : 1 // 上滚 = 更早的日子；下滚 = 回向今天
+    changeDay(delta)
+  }
+
+  function changeDay(delta: number): void {
+    if (!open_ || animating || closing || restoring.size > 0) return
     const next = shiftDay(viewing, delta)
     if (next > todayKey()) return // 不越过今天
     if (next !== viewing) {
@@ -66,6 +88,9 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
   function open(): void {
     if (open_) return
     open_ = true
+    closeRequested = false
+    closing = false
+    lastWheel = -Infinity
     viewing = todayKey()
     scrollEl.classList.add('archive-mode')
     container = document.createElement('div')
@@ -78,7 +103,12 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
   }
 
   function close(): void {
-    if (!open_ || animating) return
+    if (!open_ || closing) return
+    if (animating || restoring.size > 0) {
+      closeRequested = true
+      return
+    }
+    closing = true
     document.removeEventListener('click', onDocClick)
     document.removeEventListener('keydown', onKey)
     scrollEl.removeEventListener('wheel', onWheel)
@@ -92,15 +122,19 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
       scrollEl.classList.remove('archive-mode')
       open_ = false
       animating = false
+      closing = false
+      closeRequested = false
+      opts.onClose?.()
     })
   }
 
   /** 行碎开消失（退出动画用） */
   function shatterOut(row: HTMLElement): Promise<void> {
+    if (reducedMotion()) return Promise.resolve()
     return new Promise((resolve) => {
       const rect = row.getBoundingClientRect()
       const noteRect = note.getBoundingClientRect()
-      const cells = voronoiCells(rect.width, rect.height, 10)
+      const { cells } = glassCells(rect.width, rect.height, 8, 2)
       const stage = document.createElement('div')
       stage.className = 'shatter-stage'
       stage.style.left = `${rect.left - noteRect.left}px`
@@ -143,19 +177,29 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
     })
   }
 
-  /** 碎片从四散飞回合并成行（入场动画，行保持裂纹） */
+  /** 碎片沿放射方向飞回撞击点合拢（入场 = 完成碎裂的逆放；行保持裂纹） */
   function assembleRow(row: HTMLElement, index: number): Promise<void> {
+    if (reducedMotion()) return Promise.resolve()
     return new Promise((resolve) => {
       const rect = row.getBoundingClientRect()
       const noteRect = note.getBoundingClientRect()
-      const cells = voronoiCells(rect.width, rect.height, 12)
+      const { cells, impact } = glassCells(rect.width, rect.height, 9, 2)
       const stage = document.createElement('div')
       stage.className = 'shatter-stage'
       stage.style.left = `${rect.left - noteRect.left}px`
       stage.style.top = `${rect.top - noteRect.top}px`
       stage.style.width = `${rect.width}px`
       stage.style.height = `${rect.height}px`
+      row.style.opacity = '0' // 碎片代言；全部落定瞬间无缝交接给真身
       let done = 0
+      let settled = false
+      const settle = (): void => {
+        if (settled) return
+        settled = true
+        stage.remove()
+        row.style.opacity = ''
+        resolve()
+      }
       for (const poly of cells) {
         const shard = document.createElement('div')
         shard.className = 'shard'
@@ -165,12 +209,27 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
         clone.style.inset = '0'
         clone.style.opacity = '1'
         shard.appendChild(clone)
-        const dx = (Math.random() - 0.5) * 120
-        const dy = -(10 + Math.random() * 70)
-        const rot = (Math.random() - 0.5) * 70
+        // 入场 = 完成碎裂的逆放：碎片沿放射方向飞回撞击点合拢
+        let mx = 0
+        let my = 0
+        for (const p of poly) {
+          mx += p[0]
+          my += p[1]
+        }
+        mx /= poly.length
+        my /= poly.length
+        const rdx = mx - impact[0]
+        const rdy = my - impact[1]
+        const d = Math.hypot(rdx, rdy)
+        const ang = d > 0.5 ? Math.atan2(rdy, rdx) : Math.random() * Math.PI * 2
+        const dist = 18 + 72 / (1 + d / 26) + Math.random() * 20
+        const rot = (Math.random() - 0.5) * Math.min(90, 22 + 700 / (24 + d))
         shard.animate(
           [
-            { transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg)`, opacity: 0 },
+            {
+              transform: `translate(${Math.cos(ang) * dist}px, ${Math.sin(ang) * dist - 26 - Math.random() * 30}px) rotate(${rot}deg)`,
+              opacity: 0
+            },
             { transform: 'none', opacity: 1 }
           ],
           {
@@ -181,20 +240,12 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
           }
         ).onfinish = () => {
           shard.remove()
-          if (++done >= cells.length) {
-            stage.remove()
-            resolve()
-          }
+          if (++done >= cells.length) settle()
         }
         stage.appendChild(shard)
       }
-      row.style.opacity = '0' // 动画期间由碎片代言，结束后亮出真身
       note.appendChild(stage)
-      setTimeout(() => {
-        row.style.opacity = ''
-        stage.remove()
-        resolve()
-      }, 1100 + index * 26)
+      setTimeout(settle, 1100 + index * 26) // 隐藏窗口兜底（WAAPI 可能不触发 onfinish）
     })
   }
 
@@ -204,10 +255,30 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
     box.innerHTML = ''
     animating = true
 
+    scrollEl.scrollTop = 0
+    const toolbar = document.createElement('div')
+    toolbar.className = 'archive-toolbar'
+    const button = (text: string, title: string, action: () => void): HTMLButtonElement => {
+      const el = document.createElement('button')
+      el.type = 'button'
+      el.className = 'archive-nav'
+      el.textContent = text
+      el.title = title
+      el.setAttribute('aria-label', title)
+      el.addEventListener('click', action)
+      return el
+    }
+    const previous = button('‹', '前一天（←）', () => changeDay(-1))
     const label = document.createElement('div')
     label.className = 'archive-date'
+    label.setAttribute('aria-live', 'polite')
     label.textContent = dayLabel(viewing, todayKey())
-    box.appendChild(label)
+    const next = button('›', '后一天（→）', () => changeDay(1))
+    next.disabled = viewing >= todayKey()
+    const back = button('返回', '返回今日任务（Esc）', close)
+    toolbar.append(previous, label, next, back)
+    box.appendChild(toolbar)
+    const animations: Promise<void>[] = []
 
     const entries = opts.entriesFor(viewing)
     entries.forEach((entry, i) => {
@@ -221,30 +292,52 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
       row.append(circle, text)
       box.appendChild(row)
 
-      // 永久裂纹：这行是碎过又拼回来的
-      const cracks = crackSVG(voronoiCells(row.offsetWidth || 260, row.offsetHeight || 22, 10), row.offsetWidth || 260, row.offsetHeight || 22)
+      // 永久裂纹：发丝裂纹 SVG，这行是碎过又拼回来的
+      const w0 = row.offsetWidth || 260
+      const h0 = row.offsetHeight || 22
+      const cracks = crackSVG(crackLines(w0, h0), w0, h0)
       cracks.classList.add('keep')
       row.appendChild(cracks)
 
-      row.addEventListener('dblclick', () => {
-        if (animating) return
-        // 修复：裂纹淡出 → 愈合 → 回到今日任务区
-        cracks.animate([{ opacity: 0.55 }, { opacity: 0 }], { duration: 420, fill: 'forwards' })
-        row.animate([{ opacity: 1 }, { opacity: 0.25 }, { opacity: 1 }], { duration: 460 })
-        setTimeout(() => opts.onRestore(entry.id), 430)
-        setTimeout(() => {
-          row.style.transition = 'opacity .3s'
-          row.style.opacity = '0'
-          setTimeout(() => row.remove(), 320)
-        }, 440)
+      row.tabIndex = 0
+      row.setAttribute('role', 'button')
+      row.setAttribute('aria-label', `${entry.text}，双击或按回车恢复到今日`)
+      row.title = '双击恢复到今日 · 回车也可恢复'
+      const restore = async (): Promise<void> => {
+        if (animating || closing || restoring.has(entry.id)) return
+        restoring.add(entry.id)
+        row.setAttribute('aria-disabled', 'true')
+        if (!reducedMotion()) {
+          cracks.animate([{ opacity: 0.55 }, { opacity: 0 }], { duration: 420, fill: 'forwards' })
+          row.animate([{ opacity: 1 }, { opacity: 0.25 }, { opacity: 0 }], { duration: 460, fill: 'forwards' })
+          await new Promise<void>((resolve) => setTimeout(resolve, 470))
+        }
+        try {
+          opts.onRestore(entry.id)
+          row.remove()
+        } finally {
+          restoring.delete(entry.id)
+          if (restoring.size === 0) {
+            if (closeRequested) close()
+            else if (!box.querySelector('.archive-row')) renderDay(true)
+          }
+        }
+      }
+      row.addEventListener('dblclick', () => { void restore() })
+      row.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        void restore()
       })
 
       if (!flip && i < ANIMATE_ROW_CAP) {
-        void assembleRow(row, i).then(() => {
-          if (i === Math.min(entries.length, ANIMATE_ROW_CAP) - 1) animating = false
-        })
-      } else {
-        row.classList.add('flip-in')
+        animations.push(assembleRow(row, i))
+      } else if (!reducedMotion()) {
+        const animation = row.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180 })
+        animations.push(Promise.race([
+          animation.finished.then(() => undefined, () => undefined),
+          new Promise<void>((resolve) => setTimeout(resolve, 350))
+        ]))
       }
     })
 
@@ -254,7 +347,10 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
       empty.textContent = '这一天没有完成的任务'
       box.appendChild(empty)
     }
-    if (flip || entries.length === 0) animating = false
+    void Promise.all(animations).then(() => {
+      animating = false
+      if (closeRequested) close()
+    })
   }
 
   return { isOpen: () => open_, open, close }

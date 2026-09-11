@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('qink', {
   setAutostart: (enabled: boolean): Promise<void> => ipcRenderer.invoke('qink:autostart', enabled),
   openDataFolder: (): Promise<void> => ipcRenderer.invoke('qink:open-data-folder'),
   quit: (): void => ipcRenderer.send('qink:quit'),
+  ignoreMouse: (ignore: boolean): void => ipcRenderer.send('qink:mouse-ignore', ignore),
   dragStart: (): void => ipcRenderer.send('qink:drag-start'),
   dragMove: (dx: number, dy: number): void => ipcRenderer.send('qink:drag-move', dx, dy),
   dragEnd: (): void => ipcRenderer.send('qink:drag-end'),

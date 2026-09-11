@@ -4,3 +4,8 @@ dist/
 *.log
 .mimosa/
 .zcode/
+
+# 界面回归的临时配置与用户数据备份不进入版本库
+.scratch/ui-restore/electron-profile/
+.scratch/ui-restore/user-data-*.json
+.scratch/ui-restore/failure.txt

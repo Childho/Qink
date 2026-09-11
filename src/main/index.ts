@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, shell, Tray } from 'electron'
 import { join } from 'node:path'
-import os from 'node:os'
+import { clampNotePosition, NOTE_INSET_X, NOTE_INSET_Y, WINDOW_WIDTH, WINDOW_HEIGHT } from '../shared/window'
 import { getData, loadData, queueSave, setData } from './store'
 import { readWallpaper, watchWallpaper } from './wallpaper'
 import { TRAY_ICON_DATA_URL } from './tray-icon'
@@ -42,14 +42,11 @@ if (!app.requestSingleInstanceLock()) {
   app.on('window-all-closed', () => {})
 }
 
-function isWin11(): boolean {
-  return parseInt(os.release().split('.')[2] ?? '0', 10) >= 22000
-}
-
 function createWindow(): void {
   win = new BrowserWindow({
-    width: 320,
-    height: 540,
+    width: WINDOW_WIDTH,
+    height: WINDOW_HEIGHT,
+    hasShadow: false,
     frame: false,
     transparent: true,
     resizable: false,
@@ -65,14 +62,7 @@ function createWindow(): void {
 
   restorePosition()
 
-  // Win11 22H2+：官方毛玻璃（真模糊背后内容）；Win10 走壁纸采样路线（ADR-0003）
-  if (isWin11()) {
-    try {
-      win.setBackgroundMaterial('acrylic')
-    } catch {
-      // API 不可用时静默，渲染层会走采样/降级
-    }
-  }
+  // 统一用壁纸采样，避免系统材质填满透明阴影边缘、破坏原型圆角。
 
   win.on('ready-to-show', () => {
     win?.show()
@@ -105,18 +95,18 @@ function savePosition(): void {
   if (!win) return
   const [x, y] = win.getPosition()
   const d = getData()
-  d.settings.noteX = x
-  d.settings.noteY = y
+  d.settings.noteX = x + NOTE_INSET_X
+  d.settings.noteY = y + NOTE_INSET_Y
   queueSave()
 }
 
 let lastPosSend = 0
 
 /** 窗口位置转发给渲染层的玻璃平移（16ms 节流，拖动时帧级跟随） */
-function forwardPos(): void {
+function forwardPos(force = false): void {
   if (!win) return
   const now = Date.now()
-  if (now - lastPosSend < 16) return
+  if (!force && now - lastPosSend < 16) return
   lastPosSend = now
   const [x, y] = win.getPosition()
   win.webContents.send('qink:win-pos', x, y)
@@ -126,11 +116,8 @@ function forwardPos(): void {
 function restorePosition(): void {
   const { noteX, noteY } = getData().settings
   if (typeof noteX !== 'number' || typeof noteY !== 'number' || !win) return
-  const onScreen = screen.getAllDisplays().some((d) => {
-    const wa = d.workArea
-    return noteX >= wa.x && noteX < wa.x + wa.width && noteY >= wa.y && noteY < wa.y + wa.height
-  })
-  if (onScreen) win.setPosition(noteX, noteY)
+  const pos = clampNotePosition(noteX, noteY, screen.getPrimaryDisplay().workArea)
+  win.setPosition(pos.x - NOTE_INSET_X, pos.y - NOTE_INSET_Y)
 }
 
 function createTray(): void {
@@ -162,6 +149,7 @@ function wireIpc(): void {
   ipcMain.handle('qink:data:get', () => getData())
   ipcMain.handle('qink:data:set', (_e, incoming: QinkData) => {
     setData(incoming)
+    savePosition()
   })
 
   ipcMain.handle('qink:autostart', (_e, enabled: boolean) => {
@@ -189,18 +177,23 @@ function wireIpc(): void {
 
   ipcMain.on('qink:drag-move', (_e, dx: number, dy: number) => {
     if (!win || !dragAnchor) return
-    let x = Math.round(dragAnchor.x + dx)
-    let y = Math.round(dragAnchor.y + dy)
-    // 只在主显示器工作区内活动（spec；玻璃采样也以主屏为基准）
-    const wa = screen.getPrimaryDisplay().workArea
-    x = Math.min(Math.max(x, wa.x), wa.x + wa.width - 320)
-    y = Math.min(Math.max(y, wa.y), wa.y + wa.height - 200)
-    win.setPosition(x, y)
+    const pos = clampNotePosition(
+      dragAnchor.x + dx + NOTE_INSET_X,
+      dragAnchor.y + dy + NOTE_INSET_Y,
+      screen.getPrimaryDisplay().workArea
+    )
+    win.setPosition(pos.x - NOTE_INSET_X, pos.y - NOTE_INSET_Y)
+    forwardPos()
   })
 
   ipcMain.on('qink:drag-end', () => {
     dragAnchor = null
     savePosition()
+    forwardPos(true)
+  })
+
+  ipcMain.on('qink:mouse-ignore', (_e, ignore: boolean) => {
+    win?.setIgnoreMouseEvents(ignore === true, { forward: true })
   })
 
   ipcMain.handle('qink:glass-info', async (): Promise<GlassInfo> => {
@@ -209,7 +202,7 @@ function wireIpc(): void {
     const wp = await readWallpaper()
     return {
       ...wp,
-      win11: isWin11(),
+      win11: false,
       screenW: primary.bounds.width,
       screenH: primary.bounds.height,
       originX: primary.bounds.x,
