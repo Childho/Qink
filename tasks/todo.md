@@ -369,3 +369,10 @@ vitest 35/35 ✅（新增 mist 5 项）；typecheck ✅。dev 实机（Win10 256
 - [x] `applyForm` 即发即忘 invoke 补 `.catch`（测试假环境无通道时不刷未处理拒绝）
 - [x] 验证：typecheck ✅ · vitest ✅ · 拖拽验收 14/14 ✅ · 形变动效回归 31/31 ✅
 - [x] 装机：首次打包遇杀毒瞬时锁失败（既有已知模式，重试即过）；16:19 包 `/S` 重装，安装 asar 与 win-unpacked **字节级一致**；分发副本更新（16:21）
+
+## 开源上传 GitHub（2026-10-08）
+
+- [x] 仓库卫生：.gitignore 泛化验收缓存规则（挡住 ~30MB electron-profile）、移除 .zcode/ 跟踪、清理文档中 12 处本机路径
+- [x] 门面：README（中文，含便签/悬浮球截图）、MIT LICENSE、package.json 去 private 补 repository/license/author
+- [x] 验证：npm test 52/52 ✅ · typecheck ✅；远端核对公开可见、MIT 识别、无缓存/敏感文件混入、本地与远端提交一致
+- 仓库地址：https://github.com/Childho/Qink
