@@ -2,7 +2,12 @@
   "name": "qink",
   "version": "0.1.0",
   "description": "A frosted-glass sticky note for your desktop — goals above, today's tasks below.",
-  "private": true,
+  "license": "MIT",
+  "author": "Childho",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Childho/Qink.git"
+  },
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
