@@ -1,0 +1,443 @@
+{
+  "checks": [
+    {
+      "name": "渲染层收到 18 条种子任务",
+      "ok": true,
+      "detail": "实际 18"
+    },
+    {
+      "name": "启动应用持久化手动尺寸 500×600",
+      "ok": true,
+      "detail": "便签 500×600"
+    },
+    {
+      "name": "窗口尺寸 = 便签 + 边距（612×728）",
+      "ok": true,
+      "detail": "窗口 613×729"
+    },
+    {
+      "name": "手动高度小于内容：任务区内部滚动",
+      "ok": true,
+      "detail": "tasks scrollHeight > clientHeight"
+    },
+    {
+      "name": "底边下拖 80px：便签 600→680",
+      "ok": true,
+      "detail": "便签高 680"
+    },
+    {
+      "name": "窗口高度跟随（808）",
+      "ok": true,
+      "detail": "窗口高 809"
+    },
+    {
+      "name": "手势结束落盘 settings.noteH=680",
+      "ok": true,
+      "detail": "noteH=680"
+    },
+    {
+      "name": "右边缘右拖 80px：便签 500→580",
+      "ok": true,
+      "detail": "便签宽 580"
+    },
+    {
+      "name": "窗口宽度跟随（692）",
+      "ok": true,
+      "detail": "窗口宽 693"
+    },
+    {
+      "name": "左上角 x 不动（右/底边锚点）",
+      "ok": true,
+      "detail": "x=100"
+    },
+    {
+      "name": "左边缘左拖 40px：便签 580→620",
+      "ok": true,
+      "detail": "便签宽 620"
+    },
+    {
+      "name": "窗口随之左移 40（100→60），便签左缘跟手",
+      "ok": true,
+      "detail": "x=58"
+    },
+    {
+      "name": "双击后恢复默认宽 320",
+      "ok": true,
+      "detail": "便签宽 320"
+    },
+    {
+      "name": "高度回到自适应：18 条任务撑到 ~746",
+      "ok": true,
+      "detail": "便签高 746"
+    },
+    {
+      "name": "窗口回到 432 宽",
+      "ok": true,
+      "detail": "窗口宽 433"
+    },
+    {
+      "name": "双击清除持久化尺寸（noteW/noteH = null）",
+      "ok": true,
+      "detail": "noteW=null, noteH=null"
+    },
+    {
+      "name": "任务清空后便签缩回空态最小值 420",
+      "ok": true,
+      "detail": "便签高 420"
+    },
+    {
+      "name": "窗口跟着缩回（420 + 上40 + 下88）",
+      "ok": true,
+      "detail": "窗口高 549"
+    }
+  ],
+  "p1": {
+    "bounds": {
+      "x": 100,
+      "y": 80,
+      "width": 613,
+      "height": 729
+    },
+    "dom": {
+      "w": 500,
+      "h": 600,
+      "tasks": 18,
+      "scrollable": true
+    }
+  },
+  "p2": {
+    "bounds": {
+      "x": 100,
+      "y": 80,
+      "width": 613,
+      "height": 809
+    },
+    "dom": {
+      "w": 500,
+      "h": 680,
+      "tasks": 18,
+      "scrollable": true
+    },
+    "lastSetData": {
+      "version": 1,
+      "goals": {
+        "quarter": null,
+        "month": null,
+        "week": null
+      },
+      "tasks": [
+        {
+          "id": "seed-0",
+          "text": "尺寸验证任务 1",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-1",
+          "text": "尺寸验证任务 2",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-2",
+          "text": "尺寸验证任务 3",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-3",
+          "text": "尺寸验证任务 4",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-4",
+          "text": "尺寸验证任务 5",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-5",
+          "text": "尺寸验证任务 6",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-6",
+          "text": "尺寸验证任务 7",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-7",
+          "text": "尺寸验证任务 8",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-8",
+          "text": "尺寸验证任务 9",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-9",
+          "text": "尺寸验证任务 10",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-10",
+          "text": "尺寸验证任务 11",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-11",
+          "text": "尺寸验证任务 12",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-12",
+          "text": "尺寸验证任务 13",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-13",
+          "text": "尺寸验证任务 14",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-14",
+          "text": "尺寸验证任务 15",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-15",
+          "text": "尺寸验证任务 16",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-16",
+          "text": "尺寸验证任务 17",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-17",
+          "text": "尺寸验证任务 18",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        }
+      ],
+      "archive": [],
+      "settings": {
+        "autostart": false,
+        "fontSize": "medium",
+        "noteX": 100,
+        "noteY": 80,
+        "noteW": 500,
+        "noteH": 680
+      }
+    }
+  },
+  "p3": {
+    "bounds": {
+      "x": 100,
+      "y": 80,
+      "width": 693,
+      "height": 809
+    },
+    "dom": {
+      "w": 580,
+      "h": 680,
+      "tasks": 18,
+      "scrollable": true
+    }
+  },
+  "p4": {
+    "bounds": {
+      "x": 58,
+      "y": 80,
+      "width": 733,
+      "height": 809
+    },
+    "dom": {
+      "w": 620,
+      "h": 680,
+      "tasks": 18,
+      "scrollable": true
+    }
+  },
+  "p5": {
+    "bounds": {
+      "x": 57,
+      "y": 80,
+      "width": 433,
+      "height": 875
+    },
+    "dom": {
+      "w": 320,
+      "h": 746,
+      "tasks": 18,
+      "scrollable": false
+    },
+    "lastSetData": {
+      "version": 1,
+      "goals": {
+        "quarter": null,
+        "month": null,
+        "week": null
+      },
+      "tasks": [
+        {
+          "id": "seed-0",
+          "text": "尺寸验证任务 1",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-1",
+          "text": "尺寸验证任务 2",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-2",
+          "text": "尺寸验证任务 3",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-3",
+          "text": "尺寸验证任务 4",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-4",
+          "text": "尺寸验证任务 5",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-5",
+          "text": "尺寸验证任务 6",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-6",
+          "text": "尺寸验证任务 7",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-7",
+          "text": "尺寸验证任务 8",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-8",
+          "text": "尺寸验证任务 9",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-9",
+          "text": "尺寸验证任务 10",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-10",
+          "text": "尺寸验证任务 11",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-11",
+          "text": "尺寸验证任务 12",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-12",
+          "text": "尺寸验证任务 13",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-13",
+          "text": "尺寸验证任务 14",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-14",
+          "text": "尺寸验证任务 15",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-15",
+          "text": "尺寸验证任务 16",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-16",
+          "text": "尺寸验证任务 17",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        },
+        {
+          "id": "seed-17",
+          "text": "尺寸验证任务 18",
+          "createdAt": "2026-09-11T05:12:08.455Z"
+        }
+      ],
+      "archive": [],
+      "settings": {
+        "autostart": false,
+        "fontSize": "medium",
+        "noteX": 100,
+        "noteY": 80,
+        "noteW": null,
+        "noteH": null
+      }
+    }
+  },
+  "p6": {
+    "bounds": {
+      "x": 56,
+      "y": 80,
+      "width": 434,
+      "height": 549
+    },
+    "dom": {
+      "w": 320,
+      "h": 420,
+      "tasks": 0,
+      "scrollable": false
+    },
+    "reports": [
+      [
+        500,
+        600,
+        null
+      ],
+      [
+        500,
+        680,
+        null
+      ],
+      [
+        500,
+        680,
+        null
+      ],
+      [
+        580,
+        680,
+        null
+      ],
+      [
+        580,
+        680,
+        null
+      ],
+      [
+        620,
+        680,
+        60
+      ],
+      [
+        620,
+        680,
+        null
+      ],
+      [
+        320,
+        746,
+        null
+      ],
+      [
+        320,
+        420,
+        null
+      ]
+    ]
+  }
+}

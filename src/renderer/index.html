@@ -10,9 +10,45 @@
   </head>
   <body>
     <div id="note">
+      <!-- 收起为悬浮球（悬停浮现） -->
+      <button class="note-close" type="button" aria-label="收起为悬浮球" title="收起为悬浮球">
+        <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">
+          <path d="M1.5 1.5 L8.5 8.5 M8.5 1.5 L1.5 8.5" />
+        </svg>
+      </button>
       <div class="goals"></div>
       <div class="divider"></div>
-      <div class="tasks"></div>
+      <div class="tasks-wrap">
+        <div class="tasks"></div>
+        <div class="tasks-thumb"></div>
+      </div>
+      <!-- 边缘热区（M14）：拖拽调尺寸，双击恢复默认。放最后以便盖住同位置边缘 -->
+      <i class="edge" data-edge="left"></i>
+      <i class="edge" data-edge="right"></i>
+      <i class="edge" data-edge="bottom"></i>
+      <i class="edge corner" data-edge="bottom-left"></i>
+      <i class="edge corner" data-edge="bottom-right"></i>
+    </div>
+    <!-- 悬浮球形态（常态 = App logo）：长按拖动 · 悬停速记 · 双击展开贴纸 -->
+    <div id="dock">
+      <button id="fab" type="button" aria-label="Qink 悬浮球：双击展开贴纸" title="双击展开贴纸 · 长按拖动">
+        <!-- Q logo glyph:mask 图由 main.ts 注入(生成物 src/renderer/src/logo.ts) -->
+        <i class="logo" aria-hidden="true"></i>
+        <!-- 逾期裂缝（M15）：存在逾期任务时常亮——完成=碎掉消失，逾期=裂着不消失 -->
+        <svg class="crack" viewBox="0 0 56 56" fill="none" aria-hidden="true">
+          <path
+            class="crack-main"
+            d="M7 18 L20 24 L15 32 L27 36"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path class="crack-branch" d="M20 24 L25 20" stroke-width="1" stroke-linecap="round" />
+        </svg>
+      </button>
+      <div class="quick">
+        <input id="quick-input" type="text" placeholder="马上记一条…" aria-label="快速记录任务" />
+      </div>
     </div>
     <div id="menu" hidden></div>
     <script type="module" src="/src/main.ts"></script>

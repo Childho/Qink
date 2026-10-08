@@ -5,7 +5,7 @@ dist/
 .mimosa/
 .zcode/
 
-# 界面回归的临时配置与用户数据备份不进入版本库
-.scratch/ui-restore/electron-profile/
-.scratch/ui-restore/user-data-*.json
-.scratch/ui-restore/failure.txt
+# 验收脚本的临时运行数据不进入版本库（对全部 .scratch 子目录生效）
+.scratch/*/electron-profile/
+.scratch/*/user-data-*.json
+.scratch/*/failure.txt

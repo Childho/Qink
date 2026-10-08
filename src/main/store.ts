@@ -16,7 +16,7 @@ export function defaultData(): QinkData {
     goals: { quarter: null, month: null, week: null },
     tasks: [],
     archive: [],
-    settings: { autostart: true, fontSize: 'medium', noteX: null, noteY: null }
+    settings: { autostart: true, fontSize: 'medium', noteX: null, noteY: null, noteW: null, noteH: null, noteMode: 'note' }
   }
 }
 

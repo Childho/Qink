@@ -6,7 +6,7 @@
 
 ```powershell
 $env:ELECTRON_RUN_AS_NODE = $null
-node_modules/.bin/electron.cmd .scratch/ui-restore/verify.cjs 'E:/下载/index.html'
+node_modules/.bin/electron.cmd .scratch/ui-restore/verify.cjs 'prototype.html'
 ```
 
 脚本使用内存里的原型演示数据和实际 `out/renderer`，不连接正式版的数据保存通道。Electron 测试配置保存在本目录的 `electron-profile`（已忽略）。

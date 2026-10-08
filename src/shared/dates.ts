@@ -13,6 +13,11 @@ export interface Task {
   id: string
   text: string
   createdAt: string
+  /** 双击标记：置顶 + 紫色。旧数据无此字段 = 未标记 */
+  pinned?: boolean
+  /** 可选截止时间（M15）：本地 ISO 无时区。0 点 = 日期粒度（该日结束前完成），
+   *  非 0 点 = 时刻粒度（仅限今天）。紧急/逾期状态由 dueStatus 实时推导，不落盘 */
+  dueAt?: string
 }
 
 export interface ArchivedTask {
@@ -20,6 +25,8 @@ export interface ArchivedTask {
   text: string
   createdAt: string
   completedAt: string
+  /** 完成时的截止时间原样存档，修复时带回（逾期任务修复回来立即红） */
+  dueAt?: string
 }
 
 export interface QinkData {
@@ -32,6 +39,11 @@ export interface QinkData {
     fontSize: 'small' | 'medium' | 'large'
     noteX: number | null
     noteY: number | null
+    /** 手动调整过的便签尺寸（M14）；null = 默认宽 320 / 高度自适应 */
+    noteW: number | null
+    noteH: number | null
+    /** 双形态（悬浮球 spec）：'note' = 展开贴纸，'ball' = 收起为 App logo 圆球 */
+    noteMode: 'ball' | 'note'
   }
 }
 

@@ -4,12 +4,13 @@
 
 一张常驻 Windows 桌面的毛玻璃便利贴：季/月/周核心目标 + 今日任务（碎裂完成、滚入琥珀橙、已完成清单手势）。规格见 `.scratch/qink-phase1/spec.md`，术语见 `CONTEXT.md`，重大决策见 `docs/adr/`。
 
-- 常用命令：`npm run dev`（开发）· `npm test`（vitest）· `npm run typecheck` · `npm run package`（打包；本机网络需带 `ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/`）
-- 技术栈：Electron 38 + electron-vite 5 + TypeScript，原生 DOM 无前端框架；d3-delaunay 做碎裂几何
-- 目录：`src/main`（窗口/托盘/数据/壁纸）· `src/preload`（IPC 桥）· `src/renderer`（UI/手势/动画）· `src/shared`（纯逻辑，单测覆盖）· `tests/`
+- 常用命令：`npm run dev`（开发）· `npm test`（vitest）· `npm run typecheck` · `npm run package`（打包；本机网络需带两个镜像变量 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/`——前者管 Electron 本体、后者管 NSIS 等构建器二进制，缺任一都会卡 GitHub 超时；`dist/win-unpacked` 被占 EPERM 时先清目录）
+- 技术栈：Electron 38 + electron-vite 5 + TypeScript，原生 DOM 无前端框架
+- 目录：`src/main`（窗口/托盘/数据）· `src/preload`（IPC 桥）· `src/renderer`（UI/手势/动画）· `src/shared`（纯逻辑，单测覆盖）· `tests/`
+- 图标资产：品牌源图 `build/logo/qink.jpg` → `scripts/export-logo.ps1`（GDI+ 导出圆角片/墨色 Q）→ `scripts/gen-icons.mjs` / `gen-tray.mjs`（打包 exe ico、托盘与悬浮球 data URL）；`src/main/tray-icon.ts` 与 `src/renderer/src/logo.ts` 是生成物，勿手改
 - 数据：`文档\Qink\data.json`（AppData 留备份双写）
 - 注意：改主进程/preload 必须完全重启 dev——electron-vite 只对渲染层热更新
-- 当前状态：第一阶段（M1–M9）已交付装机；第二阶段（MCP）未开始
+- 当前状态：第一阶段（M1–M9）、UI 迭代（M10–M14、置顶排序、全面审查）、品牌 logo、任务截止时间（M15，2026-09-27：可选 dueAt、<24h 自动置顶红、逾期球裂缝，spec 在 `.scratch/task-due-time/`）、空闲自动收起（M16，2026-09-27：展开 10 分钟无交互收成悬浮球）已交付装机；阴影四档收敛（2026-09-27，ADR-0008：`:root` 四档墨色阴影 token，禁止元素自定参数）已交付装机；UI 丝滑动效修复与还原（2026-09-27：形态切换 216px 瞬移/展开吸附/min-height 托底/速记红裂缝闪现修复，任务行 hover 与按压反馈等细节还原，验收 `.scratch/ui-silk-restore/`）；安装包副本另存分发；第二阶段（MCP）未开始
 
 ## 回答风格要求
 

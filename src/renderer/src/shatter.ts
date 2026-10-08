@@ -203,6 +203,32 @@ export function crackSVG(glass: CrackPattern, w: number, h: number): SVGSVGEleme
   return svg
 }
 
+/** 玻璃质感三件套：内缘折射光 + 琉璃淡染 + 扫掠高光，叠进碎片 clip 内（随碎片一起飞）。
+ *  delay 与碎片动画对齐（合拢碎片有入场延迟时高光同步等待）；reduced-motion 跳过高光。 */
+export function glassDress(shard: HTMLElement, duration: number, delay = 0): void {
+  const tint = document.createElement('div')
+  tint.className = 'shard-tint'
+  const edge = document.createElement('div')
+  edge.className = 'shard-edge'
+  const glint = document.createElement('div')
+  glint.className = 'shard-glint'
+  shard.append(tint, edge, glint)
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  glint.animate(
+    [
+      { transform: 'translateX(-70%)', opacity: 0 },
+      { opacity: 1, offset: 0.3 },
+      { transform: 'translateX(70%)', opacity: 0 }
+    ],
+    {
+      duration: Math.max(240, duration * 0.85),
+      delay,
+      fill: 'backwards',
+      easing: 'cubic-bezier(0.3, 0, 0.2, 1)'
+    }
+  )
+}
+
 /** 任务行碎裂飞散，Promise 在碎片全部落地后完成（带 900ms 兜底，防隐藏窗口动画暂停） */
 export function shatterRow(note: HTMLElement, row: HTMLElement): Promise<void> {
   return new Promise((resolve) => {
@@ -255,12 +281,14 @@ export function shatterRow(note: HTMLElement, row: HTMLElement): Promise<void> {
       const dy = Math.sin(ang) * dist + 20 + Math.random() * 28
       const rot = (Math.random() - 0.5) * Math.min(90, 22 + 700 / (24 + d))
 
+      const dur = 380 + Math.random() * 180
+      glassDress(shard, dur)
       shard.animate(
         [
           { transform: 'none', opacity: 1 },
           { transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg)`, opacity: 0 }
         ],
-        { duration: 380 + Math.random() * 180, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' }
+        { duration: dur, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' }
       ).onfinish = () => {
         shard.remove()
         settle()

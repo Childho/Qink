@@ -1,0 +1,77 @@
+{
+  "at": "2026-09-27T06:05:00.175Z",
+  "pass": 14,
+  "total": 14,
+  "checks": [
+    {
+      "name": "四分区初始顺序：紧急 > 标记 > 滚入 > 今日",
+      "ok": true,
+      "detail": "[\"o1!\",\"p1*\",\"r1\",\"d1\",\"f1\",\"f2\",\"d2\"]"
+    },
+    {
+      "name": "d1（滚入+明天）行尾淡字「明天」",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "d2（3 天后）行尾淡字为 M/D 形式",
+      "ok": true,
+      "detail": "got 9/30"
+    },
+    {
+      "name": "o1（逾期红）无文字标注",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "悬浮球裂缝亮起（有逾期）",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "乱码输入被拒（input-shake 抖动、无 dueAt 落盘）",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "f1 设「明天」成功：淡字显示",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "f1 的 dueAt 落盘（本地 ISO 0 点）",
+      "ok": true,
+      "detail": "got 2026-09-28T00:00:00"
+    },
+    {
+      "name": "f2 设今天 23:59 后立即红并进入紧急区（o1 之后）",
+      "ok": true,
+      "detail": "[\"o1!\",\"f2!\",\"p1*\",\"r1\",\"d1\",\"f1\",\"d2\"]"
+    },
+    {
+      "name": "f2 清空提交取消时间：回今日区、无红",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "f2 的 dueAt 已删除",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "完成 o1 入档且 dueAt 原样存档",
+      "ok": true,
+      "detail": "\"2026-09-26T00:00:00\""
+    },
+    {
+      "name": "完成后球裂缝消失（无逾期剩余）",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "d1 改期为后天：淡字更新为 M/D",
+      "ok": true,
+      "detail": "got 9/29"
+    }
+  ]
+}

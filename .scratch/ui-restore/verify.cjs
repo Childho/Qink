@@ -15,7 +15,7 @@ app.whenReady().then(async () => {
   const options = { width: 960, height: 800, show: false, frame: false, transparent: true,
     webPreferences: { backgroundThrottling: false, offscreen: true } }
   const ref = new BrowserWindow(options)
-  const referencePath = process.argv[2] || 'E:/下载/index.html'
+  const referencePath = process.argv[2] || 'prototype.html'
   await ref.loadFile(referencePath)
   await ref.webContents.executeJavaScript("document.getElementById('note').style.cssText = 'left:56px;top:40px';")
   data = await ref.webContents.executeJavaScript('JSON.parse(JSON.stringify(data))')

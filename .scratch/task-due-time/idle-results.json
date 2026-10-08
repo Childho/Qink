@@ -1,0 +1,37 @@
+{
+  "at": "2026-09-27T06:56:56.247Z",
+  "pass": 6,
+  "total": 6,
+  "checks": [
+    {
+      "name": "启动为贴纸形态",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "无操作超时后自动收成球",
+      "ok": true,
+      "detail": "form=ball"
+    },
+    {
+      "name": "双击球展开成功",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "交互后未超时仍是贴纸",
+      "ok": true,
+      "detail": "form=note"
+    },
+    {
+      "name": "续命后无操作再次收起",
+      "ok": true,
+      "detail": "form=ball"
+    },
+    {
+      "name": "交互重置计时生效",
+      "ok": true,
+      "detail": "form=note"
+    }
+  ]
+}

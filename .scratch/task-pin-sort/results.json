@@ -1,0 +1,74 @@
+{
+  "checks": [
+    {
+      "name": "A1 初始顺序：滚入 3 条在上 + 今日 4 条在下",
+      "ok": true,
+      "detail": "r1,r2,r3,f1,f2,f3,f4"
+    },
+    {
+      "name": "A2 双击 f1 → 置顶第一位且带 pinned 类",
+      "ok": true,
+      "detail": "f1*,r1,r2,r3,f2,f3,f4"
+    },
+    {
+      "name": "A2 落盘：tasks[0] = f1 且 pinned=true",
+      "ok": true,
+      "detail": "{\"id\":\"f1\",\"text\":\"今日1\",\"createdAt\":\"2026-09-27T08:18:10.402Z\",\"pinned\":true}"
+    },
+    {
+      "name": "A2 标记行样式生效：圆圈紫边 + 文字紫墨",
+      "ok": true,
+      "detail": "circle=rgb(124, 58, 237) text=rgb(91, 33, 182)"
+    },
+    {
+      "name": "A3 再双击 f1 → 取消标记回到今日区首位",
+      "ok": true,
+      "detail": "r1,r2,r3,f1,f2,f3,f4"
+    },
+    {
+      "name": "A4 f2 下移 40px → 与 f3 交换",
+      "ok": true,
+      "detail": "r1,r2,r3,f1,f3,f2,f4"
+    },
+    {
+      "name": "A4 落盘数组顺序 = 显示顺序（不变量）",
+      "ok": true,
+      "detail": "[\"r1\",\"r2\",\"r3\",\"f1\",\"f3\",\"f2\",\"f4\"]"
+    },
+    {
+      "name": "A5 f4 拖到最顶 → 钳制在今日区首位（滚入 3 条仍在上）",
+      "ok": true,
+      "detail": "r1,r2,r3,f4,f1,f3,f2"
+    },
+    {
+      "name": "A6 拖动中被拖行带 drag-sorting 类、浮起带影且 1 行让位",
+      "ok": true,
+      "detail": "{\"dragging\":true,\"lifted\":true,\"shifted\":2}"
+    },
+    {
+      "name": "A6 松手进入落位动画：浮起类立即撤下、被拖行带内联位移滑向槽位",
+      "ok": true,
+      "detail": "{\"dragging\":false,\"tf\":\"translateY(31.4773px)\"}"
+    },
+    {
+      "name": "A6 落位演完后重建净化：无 drag-sorting 残留、transform 全清",
+      "ok": true,
+      "detail": "{\"dragging\":false,\"residual\":0}"
+    },
+    {
+      "name": "A7 单击 f1 → 延迟后出现改写输入框",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A7 Escape 退出编辑",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "A8 双击 f1 → 不出现改写输入框且标记生效",
+      "ok": true,
+      "detail": "f1*,r1,r2,r3,f4,f3,f2"
+    }
+  ]
+}

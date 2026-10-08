@@ -1,9 +1,9 @@
 import type { ArchivedTask } from '@shared/dates'
 import { dateKey } from '@shared/dates'
-import { crackLines, crackSVG, glassCells } from './shatter'
+import { crackLines, crackSVG, glassCells, glassDress } from './shatter'
 
 // 已完成清单（spec.md 招牌交互）：碎片合并成仍带裂纹的任务条，任务区暂时隐藏。
-// 滚轮逐日往前翻；双击修复（裂纹淡出，任务回到今日）；点别处/Esc 反向碎开退出。
+// 滚轮逐日往前翻；单击修复（裂纹淡出，任务回到今日）；点别处/Esc 反向碎开退出。
 
 const WEEK_CN = ['日', '一', '二', '三', '四', '五', '六']
 const ANIMATE_ROW_CAP = 10 // 碎片合并动画只做前 N 行，更老的直接淡入（控制开销）
@@ -153,12 +153,14 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
         shard.appendChild(clone)
         const dx = (Math.random() - 0.5) * 60
         const dy = 18 + Math.random() * 40
+        const dur = 300 + Math.random() * 140
+        glassDress(shard, dur)
         shard.animate(
           [
             { transform: 'none', opacity: 1 },
             { transform: `translate(${dx}px, ${dy}px) rotate(${(Math.random() - 0.5) * 40}deg)`, opacity: 0 }
           ],
-          { duration: 300 + Math.random() * 140, easing: 'cubic-bezier(0.4, 0, 0.9, 0.6)' }
+          { duration: dur, easing: 'cubic-bezier(0.4, 0, 0.9, 0.6)' }
         ).onfinish = () => {
           shard.remove()
           if (++done >= cells.length) {
@@ -224,6 +226,8 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
         const ang = d > 0.5 ? Math.atan2(rdy, rdx) : Math.random() * Math.PI * 2
         const dist = 18 + 72 / (1 + d / 26) + Math.random() * 20
         const rot = (Math.random() - 0.5) * Math.min(90, 22 + 700 / (24 + d))
+        const dur = 380 + Math.random() * 140
+        glassDress(shard, dur, index * 26)
         shard.animate(
           [
             {
@@ -233,7 +237,7 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
             { transform: 'none', opacity: 1 }
           ],
           {
-            duration: 380 + Math.random() * 140,
+            duration: dur,
             delay: index * 26,
             easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.12)',
             fill: 'backwards'
@@ -275,13 +279,57 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
     label.textContent = dayLabel(viewing, todayKey())
     const next = button('›', '后一天（→）', () => changeDay(1))
     next.disabled = viewing >= todayKey()
-    const back = button('返回', '返回今日任务（Esc）', close)
-    toolbar.append(previous, label, next, back)
+    toolbar.append(previous, label, next)
     box.appendChild(toolbar)
     const animations: Promise<void>[] = []
 
+    // 单击复原：裂纹愈合 + 完成圈清空 → 整行起飞回归 → 高度合拢补位（单条连续时间线，无空白态）
+    const restore = async (entry: ArchivedTask, row: HTMLElement): Promise<void> => {
+      if (animating || closing || restoring.has(entry.id)) return
+      restoring.add(entry.id)
+      row.setAttribute('aria-disabled', 'true')
+      if (!reducedMotion()) {
+        const cracks = row.querySelector('.cracks')
+        cracks?.animate([{ opacity: 0.55 }, { opacity: 0 }], { duration: 300, easing: 'ease-out', fill: 'forwards' })
+        row.querySelector('.circle')?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, easing: 'ease-out', fill: 'forwards' })
+        row.animate(
+          [
+            { transform: 'none', opacity: 1 },
+            { transform: 'translateY(-12px) scale(1.03)', opacity: 1, offset: 0.45 },
+            { transform: 'translateY(-36px) scale(0.97)', opacity: 0 }
+          ],
+          { duration: 520, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', fill: 'forwards' }
+        )
+        await new Promise<void>((resolve) => setTimeout(resolve, 280))
+        opts.onRestore(entry.id) // 愈合完成瞬间数据先归位（未完成列表此刻隐藏，无视觉突跳）
+        // 起飞完成后合拢：高度归零 + 负边距抵消两侧 11px gap，下方行平滑补位
+        row.style.overflow = 'hidden'
+        row.style.minHeight = '0'
+        row.style.transition = 'max-height 0.32s ease, margin 0.32s ease'
+        row.style.maxHeight = `${row.offsetHeight}px`
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        row.style.maxHeight = '0'
+        row.style.marginTop = row.style.marginBottom = '-11px'
+        await new Promise<void>((resolve) => setTimeout(resolve, 340))
+      } else {
+        opts.onRestore(entry.id)
+      }
+      try {
+        row.remove()
+      } finally {
+        restoring.delete(entry.id)
+        if (restoring.size === 0) {
+          if (closeRequested) close()
+          else if (!box.querySelector('.archive-row')) renderDay(true)
+        }
+      }
+    }
+
     const entries = opts.entriesFor(viewing)
-    entries.forEach((entry, i) => {
+    // 三阶段批量读写：先全部建行入 DOM → 一次性读尺寸（单次回流）→ 再写裂纹。
+    // 逐行「append→读→append」交错会让每行强制一次回流（布局抖动）
+    const rows: HTMLElement[] = []
+    for (const entry of entries) {
       const row = document.createElement('div')
       row.className = 'task archive-row'
       const circle = document.createElement('span')
@@ -291,44 +339,29 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
       text.textContent = entry.text
       row.append(circle, text)
       box.appendChild(row)
-
-      // 永久裂纹：发丝裂纹 SVG，这行是碎过又拼回来的
-      const w0 = row.offsetWidth || 260
-      const h0 = row.offsetHeight || 22
-      const cracks = crackSVG(crackLines(w0, h0), w0, h0)
-      cracks.classList.add('keep')
-      row.appendChild(cracks)
+      rows.push(row)
 
       row.tabIndex = 0
       row.setAttribute('role', 'button')
-      row.setAttribute('aria-label', `${entry.text}，双击或按回车恢复到今日`)
-      row.title = '双击恢复到今日 · 回车也可恢复'
-      const restore = async (): Promise<void> => {
-        if (animating || closing || restoring.has(entry.id)) return
-        restoring.add(entry.id)
-        row.setAttribute('aria-disabled', 'true')
-        if (!reducedMotion()) {
-          cracks.animate([{ opacity: 0.55 }, { opacity: 0 }], { duration: 420, fill: 'forwards' })
-          row.animate([{ opacity: 1 }, { opacity: 0.25 }, { opacity: 0 }], { duration: 460, fill: 'forwards' })
-          await new Promise<void>((resolve) => setTimeout(resolve, 470))
-        }
-        try {
-          opts.onRestore(entry.id)
-          row.remove()
-        } finally {
-          restoring.delete(entry.id)
-          if (restoring.size === 0) {
-            if (closeRequested) close()
-            else if (!box.querySelector('.archive-row')) renderDay(true)
-          }
-        }
-      }
-      row.addEventListener('dblclick', () => { void restore() })
+      row.setAttribute('aria-label', `${entry.text}，单击或按回车恢复到今日`)
+      row.title = '单击恢复到今日 · 回车也可恢复'
+      row.addEventListener('click', () => { void restore(entry, row) })
       row.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter' && event.key !== ' ') return
         event.preventDefault()
-        void restore()
+        void restore(entry, row)
       })
+    }
+
+    // 读：一次性收集全部行尺寸（单次回流）
+    const sizes = rows.map((row) => ({ w: row.offsetWidth || 260, h: row.offsetHeight || 22 }))
+
+    // 写：永久裂纹（发丝裂纹 SVG，这行是碎过又拼回来的）+ 入场编排
+    rows.forEach((row, i) => {
+      const { w: w0, h: h0 } = sizes[i]
+      const cracks = crackSVG(crackLines(w0, h0), w0, h0)
+      cracks.classList.add('keep')
+      row.appendChild(cracks)
 
       if (!flip && i < ANIMATE_ROW_CAP) {
         animations.push(assembleRow(row, i))

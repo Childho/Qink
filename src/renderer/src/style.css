@@ -9,12 +9,29 @@
   --tracking-display: -0.015em;
   --amber: #d97706; /* 滚入任务身份色（spec） */
   --amber-ink: #92400e;
-  --note-mist: rgba(255, 255, 255, 0.42);
-  --note-edge: rgba(255, 255, 255, 0.55);
+  --violet: #7c3aed; /* 标记任务身份色（双击标记置顶） */
+  --violet-ink: #5b21b6;
+  --danger: #dc2626; /* 紧急/逾期任务身份色（M15：时间的客观紧迫） */
+  --danger-ink: #991b1b;
+  /* 蛋白石琉璃材质（替代毛玻璃，零 blur 依赖，全平台渲染一致）：
+     实色哑光面 + 环影勾边 + 底部厚度线 + SVG 微噪点，深度全靠分层阴影 */
+  --note-surface: #fafaf8;
+  /* 阴影体系：只许用这四档，不许各元素自定参数（ADR-0008）。
+     同一墨色（--fg 同源），只按「离桌面多高」分档；浓度 ≤ 0.2，影子是氛围不是造型 */
+  --shadow-float:
+    0 10px 28px rgba(29, 29, 31, 0.16),
+    0 2px 6px rgba(29, 29, 31, 0.08); /* 常驻悬浮：便签 / 悬浮球，环境影 + 接触影 */
+  --shadow-raised:
+    0 14px 32px rgba(29, 29, 31, 0.2),
+    0 3px 8px rgba(29, 29, 31, 0.1); /* 抬起一档：hover / 拖起 */
+  --shadow-overlay: 0 8px 24px rgba(29, 29, 31, 0.18); /* 盖在便签上的浮层：菜单 / 速记胶囊 */
+  --shadow-inline: 0 2px 8px rgba(29, 29, 31, 0.12); /* 卡片内部浮起：拖动排序行 */
+  --note-rim: rgba(29, 29, 31, 0.08);
+  --note-thickness: rgba(29, 29, 31, 0.05);
+  --menu-surface: #f5f5f3;
+  --grain-opacity: 0.14;
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)' opacity='0.55'/%3E%3C/svg%3E");
   --note-radius: 16px;
-  --note-shadow:
-    0 24px 56px rgba(10, 14, 28, 0.3),
-    0 2px 10px rgba(10, 14, 28, 0.14);
   --fs-small: 12px;
   --fs-medium: 13px;
   --fs-large: 15px;
@@ -24,6 +41,11 @@
   --note-font-text:
     'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei',
     sans-serif;
+  /* 签名缓动：全站过渡共用一条「快出缓停」曲线（形变/滑条/任务行进出同一气质） */
+  --ease-silk: cubic-bezier(0.32, 0.72, 0, 1);
+  --motion-morph: 460ms;
+  /* 标准缓动：悬停浮现类过渡（速记胶囊 / 悬浮球光影）用 */
+  --ease-standard: cubic-bezier(0.28, 0, 0.22, 1);
 }
 
 * {
@@ -42,7 +64,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ---------- 贴纸本体：纯白毛玻璃 ---------- */
+/* ---------- 贴纸本体：蛋白石琉璃（实色哑光，玻璃的记忆但不依赖 blur） ---------- */
 
 #note {
   --fs: var(--fs-medium);
@@ -50,14 +72,20 @@ body {
   left: var(--note-inset-x, 56px);
   top: var(--note-inset-y, 40px);
   width: 320px;
-  height: 540px;
+  /* 高度自适应（ADR-0005）：内容撑开，空态保底有呼吸留白；
+     上限 = 窗口高 - 上下透明边距，与主进程的窗口上限天然一致 */
+  height: auto;
+  min-height: var(--note-min-h, 420px);
+  max-height: calc(100vh - var(--note-inset-y, 40px) - var(--note-inset-bottom, 88px));
   overflow: hidden;
   isolation: isolate;
   border-radius: var(--note-radius);
-  background: transparent;
+  background: var(--note-surface);
+  /* 深度两层：远环境影 + 近接触影（--shadow-float）/ 外环影勾边 / 底部内缘「厚度线」 */
   box-shadow:
-    var(--note-shadow),
-    inset 0 0 0 1px var(--note-edge);
+    var(--shadow-float),
+    0 0 0 1px var(--note-rim),
+    inset 0 -1px 0 var(--note-thickness);
   color: var(--fg);
   padding: 22px 20px 18px;
   display: flex;
@@ -65,6 +93,11 @@ body {
 }
 #note.dragging {
   cursor: grabbing;
+  /* 拖起微抬：影升一档（--shadow-raised），位置不动、只有光变化 */
+  box-shadow:
+    var(--shadow-raised),
+    0 0 0 1px var(--note-rim),
+    inset 0 -1px 0 var(--note-thickness);
 }
 #note[data-size='small'] {
   --fs: var(--fs-small);
@@ -73,18 +106,16 @@ body {
   --fs: var(--fs-large);
 }
 
-/* ---------- 毛玻璃层：壁纸预模糊贴图 + 平移（ADR-0003） ---------- */
-
-.glass {
+/* 微噪点：琉璃的「磨砂齿感」，接替 blur 承担材质信息量（SVG 滤镜，全平台一致） */
+#note::before {
+  content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background-repeat: no-repeat;
-  opacity: 0;
-  transition: opacity 0.45s ease;
-  /* 原型 --glass-filter 的饱和/提亮（模糊在采样时做，半径对齐 glass.ts 的 26px） */
-  filter: saturate(1.5) brightness(1.06);
-  z-index: 0;
+  background: var(--grain);
+  background-size: 160px 160px;
+  opacity: var(--grain-opacity);
+  pointer-events: none;
 }
 
 .goals,
@@ -92,19 +123,6 @@ body {
 .tasks {
   position: relative;
   z-index: 1;
-}
-
-/* 降级：采样失败/动态壁纸 → 加浓白雾保证可读 */
-#note.glass-fallback {
-  background: rgba(255, 255, 255, 0.6);
-}
-#note.glass-fallback .glass {
-  display: none;
-}
-
-/* Win11 官方 acrylic：模糊与饱和由系统提供，只叠轻雾 */
-body.acrylic-mode #note {
-  background: rgba(255, 255, 255, 0.38);
 }
 
 /* ---------- 目标区：季 > 月 > 周 层级 ---------- */
@@ -131,7 +149,7 @@ body.acrylic-mode #note {
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.14em;
-  opacity: 0.34;
+  opacity: 0.55;
 }
 
 .gtext {
@@ -152,7 +170,7 @@ body.acrylic-mode #note {
   font-weight: 450;
 }
 .goal.ghost {
-  opacity: 0.38;
+  opacity: 0.6;
 }
 
 .divider {
@@ -171,21 +189,52 @@ body.acrylic-mode #note {
 /* ---------- 任务区 ---------- */
 
 .tasks {
-  flex: 1;
+  /* 内容撑开决定便签高度；空态下撑满保底留白；触顶后被压缩转入内部滚动。
+     左右 8px 内边距与任务行 -8px 负边距互相抵消（文字位置不变），
+     hover 底色得以全宽铺出而不产生幽灵横向溢出；滑条落在右内边距里 */
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding-right: 4px;
+  padding: 0 8px;
 }
 
-.tasks::-webkit-scrollbar {
-  width: 3px;
+/* ── 滑条：原生滚动条隐藏；溢出时自绘滑条从触点位置 scaleY 生长，静置后收回 ── */
+.tasks-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  position: relative;
 }
-.tasks::-webkit-scrollbar-thumb {
-  background: rgba(29, 29, 31, 0.18);
+.tasks {
+  scrollbar-width: none;
+}
+.tasks::-webkit-scrollbar {
+  display: none;
+}
+.tasks-thumb {
+  position: absolute;
+  right: 2px;
+  top: 3px;
+  width: 3px;
   border-radius: 2px;
+  background: rgba(29, 29, 31, 0.2);
+  opacity: 0;
+  /* --ty 定位滑块，scaleY 围绕触点（--oy）生长/收回 */
+  transform: translateY(var(--ty, 0px)) scaleY(0);
+  transform-origin: 50% var(--oy, 50%);
+  transition:
+    opacity 200ms ease,
+    transform 240ms var(--ease-silk);
+  pointer-events: none;
+  z-index: 2;
+  will-change: transform, opacity;
+}
+.tasks-thumb.on {
+  opacity: 1;
+  transform: translateY(var(--ty, 0px)) scaleY(1);
 }
 
 .task {
@@ -199,17 +248,30 @@ body.acrylic-mode #note {
   opacity: 1;
   transform: translateX(0);
   overflow: hidden;
+  /* 负边距 + 内边距：hover 背景全宽显现时文字位置不动 */
+  margin: 0 -8px;
+  padding: 0 8px;
+  border-radius: 8px;
+  /* 只过渡实际变化的属性（margin/gap 从未变化）；max-height/min-height 折叠属单行偶发，接受回流成本；
+     box-shadow/background 供拖动排序浮起/落下与 hover 底色的淡入淡出 */
   transition:
-    opacity 0.36s ease,
-    transform 0.36s ease,
-    max-height 0.36s ease,
-    margin 0.36s ease,
-    gap 0.36s ease;
+    opacity 0.36s var(--ease-silk),
+    transform 0.36s var(--ease-silk),
+    max-height 0.36s var(--ease-silk),
+    min-height 0.36s var(--ease-silk),
+    box-shadow var(--motion-fast) ease,
+    background-color var(--motion-fast) ease;
+}
+.task:hover {
+  background: rgba(29, 29, 31, 0.04);
 }
 .task.completing {
   opacity: 0;
   transform: translateX(8px);
   max-height: 0;
+  min-height: 0;
+  /* 折叠期间把内容裁进 0 高行内：基础规则的 overflow:visible 是给完成圈透明热区的 */
+  overflow: hidden;
 }
 
 .circle {
@@ -221,16 +283,21 @@ body.acrylic-mode #note {
   cursor: pointer;
   transition:
     border-color 0.15s ease,
-    background 0.15s ease;
+    background 0.15s ease,
+    transform 0.12s ease;
 }
 .circle:hover {
   border-color: rgba(29, 29, 31, 0.7);
   background: rgba(29, 29, 31, 0.05);
 }
+.circle:active {
+  transform: scale(0.85);
+}
 
 .text {
   flex: 1;
   word-break: break-all;
+  user-select: none; /* 单击即编辑，双击标记，不需要选词；也防拖动排序时选中文字 */
 }
 
 /* 滚入任务：琥珀橙（两档制第二档） */
@@ -245,6 +312,89 @@ body.acrylic-mode #note {
   color: var(--amber-ink);
 }
 
+/* 标记任务：紫（主动标记优先于被动滚入，写在 .rolled 之后，叠加时紫覆盖琥珀橙） */
+.task.pinned .circle {
+  border-color: var(--violet);
+}
+.task.pinned .circle:hover {
+  border-color: var(--violet);
+  background: color-mix(in srgb, var(--violet) 14%, transparent);
+}
+.task.pinned .text {
+  color: var(--violet-ink);
+}
+
+/* 紧急/逾期任务：红（M15 spec：客观时间紧迫 > 主观标记，写在 .pinned 之后，
+   叠加时红覆盖紫——pinned 字段无损，只是位置与颜色被时间接管） */
+.task.urgent .circle {
+  border-color: var(--danger);
+}
+.task.urgent .circle:hover {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+.task.urgent .text {
+  color: var(--danger-ink);
+}
+
+/* 截止时间标注：行尾淡字（紧急/逾期不加文字，由红独担） */
+.due-hint {
+  flex: none;
+  font-size: 10px;
+  opacity: 0.5;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+/* 设定时间行内输入：右对齐小输入位，替换标注位 */
+.due-input {
+  flex: none;
+  width: 88px;
+  font-size: 12px;
+  text-align: right;
+}
+.input-shake {
+  animation: inputShake 220ms ease;
+}
+@keyframes inputShake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+
+/* 拖动排序（.tasks.sorting 期间）：
+ * 被拖行 transform 即时跟手（不过渡），will-change 提升合成层（文字只光栅化一次），
+ * 浮起的阴影/底色淡入淡出；让位与落位行用更短的干脆缓出曲线，
+ * 让位要「贴得住手」——过渡一旦长过手的速度就成了追赶，丝滑感全毁 */
+.task.drag-sorting {
+  transition:
+    box-shadow var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    opacity var(--motion-fast) ease;
+  opacity: 0.92;
+  position: relative; /* 撑起 z-index，浮在让位行之上 */
+  z-index: 3;
+  cursor: grabbing;
+  border-radius: 6px;
+  background: color-mix(in srgb, white 42%, transparent);
+  box-shadow: var(--shadow-inline);
+  will-change: transform;
+}
+.tasks.sorting .task:not(.drag-sorting) {
+  transition:
+    opacity 0.36s ease,
+    transform 0.18s cubic-bezier(0.2, 0, 0, 1),
+    max-height 0.36s ease,
+    box-shadow var(--motion-fast) ease,
+    background-color var(--motion-fast) ease;
+}
+
 /* ---------- 输入行 ---------- */
 
 input {
@@ -257,10 +407,64 @@ input {
   width: 100%;
 }
 
+/* 占位符不落浏览器默认灰，跟随正文色系（M14 文字对比度） */
+input::placeholder {
+  color: rgba(29, 29, 31, 0.45);
+  opacity: 1;
+}
+
 .goal-input,
 .task-input {
   border-bottom: 1px dashed rgba(29, 29, 31, 0.25);
   padding-bottom: 1px;
+}
+
+/* ---------- 行内编辑输入反馈（B+A）----------
+   B 进编辑：下边框实线从左生长（.input-active）
+   A 落定：保存瞬间下边框扫实一遍（.input-flash），扫完回到虚线态
+   只动下边框 hairline，零布局位移；reduced-motion 由全局停用规则接管 */
+.goal-input,
+.task-input,
+.composer {
+  position: relative;
+  background-image: linear-gradient(90deg, var(--hairline-strong), var(--hairline-strong));
+  background-repeat: no-repeat;
+  background-size: 0% 1.5px;
+  background-position: 0 100%;
+}
+.input-active {
+  background-size: 100% 1.5px;
+  transition: background-size 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+.input-flash {
+  animation: inputCommit 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes inputCommit {
+  0% {
+    background-size: 0% 1.5px;
+  }
+  55% {
+    background-size: 100% 1.5px;
+  }
+  100% {
+    background-size: 0% 1.5px;
+  }
+}
+
+/* ---------- 速记提交：碎和聚（文字碎成琉璃屑，弧线飞入悬浮球收拢） ---------- */
+.shard-flight {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+}
+.fly-shard {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: var(--note-surface);
+  box-shadow: 0 0 0 1px var(--note-rim);
+  will-change: transform, opacity;
 }
 
 .composer {
@@ -271,9 +475,9 @@ input {
 
 .composer-hint {
   font-size: var(--fs);
-  opacity: 0.32;
+  opacity: 0.55;
   cursor: text;
-  padding-left: 23px; /* 与任务文字对齐（标签列 + 间距） */
+  padding-left: 24px; /* 与任务文字对齐（负边距行：圆圈 14 + 间距 10，含容器 8px 内边距） */
 }
 
 /* ---------- 碎裂动画 ---------- */
@@ -288,6 +492,34 @@ input {
   position: absolute;
   inset: 0;
   will-change: transform, opacity;
+}
+
+/* 玻璃质感三件套（贴在碎片 clip 内，随碎片一起飞）：
+   内缘折射光 + 琉璃淡染 + 扫掠高光——碎片读作「玻璃屑」而非纸片 */
+.shard-edge,
+.shard-glint,
+.shard-tint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.shard-edge {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.3),
+    inset 0 0 14px rgba(255, 255, 255, 0.16);
+}
+.shard-tint {
+  background: rgba(252, 252, 250, 0.14);
+}
+.shard-glint {
+  inset: -30% -60%;
+  background: linear-gradient(
+    104deg,
+    rgba(255, 255, 255, 0) 40%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0) 60%
+  );
+  opacity: 0;
 }
 
 .cracks {
@@ -312,7 +544,7 @@ input {
   font-size: 11px;
   opacity: 0.5;
   letter-spacing: 0.05em;
-  padding-left: 23px;
+  padding-left: 24px;
 }
 
 .circle.done {
@@ -337,7 +569,7 @@ input {
 
 .archive-empty {
   font-size: var(--fs);
-  opacity: 0.34;
+  opacity: 0.5;
   padding-left: 23px;
 }
 
@@ -356,19 +588,17 @@ input {
   }
 }
 
-/* ---------- 右键抽屉菜单 ---------- */
+/* ---------- 右键抽屉菜单：实色浮层（半透明无 blur 会漏出锐利底纹，故不透明） ---------- */
 
 #menu {
   position: fixed;
   z-index: 10;
   min-width: 132px;
-  background: rgba(251, 251, 253, 0.9);
-  -webkit-backdrop-filter: blur(24px) saturate(1.8);
-  backdrop-filter: blur(24px) saturate(1.8);
+  background: var(--menu-surface);
   border-radius: var(--radius-md);
   box-shadow:
-    0 12px 32px rgba(10, 14, 28, 0.2),
-    0 0 0 1px rgba(29, 29, 31, 0.08);
+    var(--shadow-overlay),
+    0 0 0 1px var(--note-rim);
   padding: 5px;
 }
 
@@ -384,6 +614,9 @@ input {
 .menu-item:hover {
   background: rgba(29, 29, 31, 0.06);
 }
+.menu-item:active {
+  background: rgba(29, 29, 31, 0.1);
+}
 
 .menu-item.checked {
   color: var(--amber);
@@ -396,20 +629,51 @@ input {
   margin: 4px 8px;
 }
 
-/* 白雾必须盖在采样图上；内描边也在这里绘制，避免被不透明底图盖住。 */
-#note::after {
-  content: '';
+/* ---------- 边缘热区（M14）：拖拽调尺寸，双击恢复默认 ----------
+   细条贴边不遮内容；角放在 DOM 末尾，同层级下优先命中。 */
+
+.edge {
   position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  background: var(--note-mist);
-  box-shadow: inset 0 0 0 1px var(--note-edge);
+  z-index: 4;
 }
-#note.glass-fallback { background: transparent; }
-#note.glass-fallback::after { background: rgba(255, 255, 255, 0.72); }
-.goals { flex: none; max-height: 48%; overflow-y: auto; scrollbar-width: thin; }
+.edge[data-edge='left'] {
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 6px;
+  cursor: ew-resize;
+}
+.edge[data-edge='right'] {
+  right: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 6px;
+  cursor: ew-resize;
+}
+.edge[data-edge='bottom'] {
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 6px;
+  cursor: ns-resize;
+}
+.edge.corner {
+  width: 16px;
+  height: 16px;
+}
+.edge[data-edge='bottom-left'] {
+  left: 0;
+  bottom: 0;
+  cursor: nesw-resize;
+}
+.edge[data-edge='bottom-right'] {
+  right: 0;
+  bottom: 0;
+  cursor: nwse-resize;
+}
+
+.goals { flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.goals::-webkit-scrollbar { display: none; }
 .goal { flex-shrink: 0; }
 .goal:has(input) { opacity: 1; }
 .gtext, .text, input { min-width: 0; }
@@ -426,10 +690,10 @@ button { font: inherit; color: inherit; border: 0; background: transparent; curs
 .menu-item { display: block; width: 100%; text-align: left; }
 .archive-toolbar { display: flex; align-items: center; gap: 4px; flex: none; }
 .archive-toolbar .archive-date { flex: 1; padding-left: 0; }
-.archive-nav, .archive-back { border-radius: 6px; padding: 4px 6px; font-size: 11px; }
-.archive-nav:hover, .archive-back:hover { background: rgba(29,29,31,.06); }
+.archive-nav { border-radius: 6px; padding: 4px 6px; font-size: 11px; }
+.archive-nav:hover { background: rgba(29,29,31,.06); }
 .archive-nav:disabled { opacity: .2; cursor: default; }
-.archive-help { font-size: 10px; opacity: .4; padding-left: 24px; }
+.archive-help { font-size: 10px; opacity: .55; padding-left: 24px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
@@ -439,3 +703,294 @@ button { font: inherit; color: inherit; border: 0; background: transparent; curs
 .circle { position: relative; }
 button.circle::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; }
 .shard { overflow: hidden; }
+
+/* ---------- 双形态：贴纸 ⇄ 悬浮球（常态 = App logo） ---------- */
+
+body[data-form='ball'] #note {
+  display: none;
+}
+
+#dock {
+  position: absolute;
+  /* 球形态窗口两侧各留 BALL_INSET_X(272px) 速记胶囊空间，球不再是贴窗口左缘 */
+  left: var(--ball-inset-x, 272px);
+  top: var(--note-inset-y, 40px);
+  width: 56px;
+  height: 56px;
+  display: none;
+}
+body[data-form='ball'] #dock {
+  display: block;
+}
+
+/* hover 桥：球与胶囊间 12px 空隙会让 :hover 断层；四周延伸的透明命中区
+   把断层焊死（换边 flip 后同样覆盖），兼作小目标容错热区 */
+#dock::after {
+  content: '';
+  position: absolute;
+  top: -10px;
+  bottom: -10px;
+  left: -16px;
+  right: -16px;
+}
+
+#fab {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--note-surface);
+  box-shadow:
+    var(--shadow-float),
+    0 0 0 1px var(--note-rim),
+    inset 0 -1px 0 var(--note-thickness);
+  color: var(--fg);
+  cursor: grab;
+  display: grid;
+  place-items: center;
+  transition:
+    box-shadow 220ms var(--ease-standard),
+    transform 220ms var(--ease-standard);
+}
+#fab::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--grain);
+  background-size: 160px 160px;
+  opacity: var(--grain-opacity);
+  pointer-events: none;
+}
+/* Q logo:mask 只取 glyph 的 alpha,颜色跟随 --fg 墨色(mask-image 由 main.ts 注入 logo.ts 生成物) */
+#fab .logo {
+  position: relative;
+  display: block;
+  width: 24px;
+  height: 24px;
+  background: var(--fg);
+  opacity: 0.9;
+  -webkit-mask: center / contain no-repeat;
+  mask: center / contain no-repeat;
+  transition: opacity 160ms ease;
+}
+/* 逾期裂缝（M15）：球面一道红裂纹常亮不闪——存在逾期任务时由 main.ts 加 .cracked */
+#fab .crack {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity var(--motion-fast) ease;
+  pointer-events: none;
+}
+#fab.cracked .crack {
+  opacity: 1;
+}
+#fab .crack path {
+  stroke: var(--danger);
+}
+#fab .crack .crack-branch {
+  opacity: 0.7;
+}
+#fab:hover {
+  box-shadow:
+    var(--shadow-raised),
+    0 0 0 1px var(--note-rim),
+    inset 0 -1px 0 var(--note-thickness);
+}
+/* 拖起时指针捕获跟随容器，光标要写在 dock 上才不会回落 */
+#dock.lifting { cursor: grabbing; }
+#dock.lifting #fab {
+  cursor: grabbing;
+  transform: scale(1.07);
+  box-shadow:
+    var(--shadow-raised),
+    0 0 0 1px var(--note-rim),
+    inset 0 -1px 0 var(--note-thickness);
+}
+
+/* 悬停速记：贴着球侧滑出的小胶囊，靠近屏幕左缘自动换边 */
+.quick {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 12px);
+  width: 232px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: var(--note-surface);
+  box-shadow:
+    var(--shadow-overlay),
+    0 0 0 1px var(--note-rim);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) translateX(8px);
+  /* 离场缓冲 150ms：入场即时、离场延迟的不对称，误触滑出不会「啪」地消失 */
+  transition:
+    opacity 220ms var(--ease-standard),
+    transform 220ms var(--ease-standard);
+  transition-delay: 150ms;
+}
+.quick::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--grain);
+  background-size: 160px 160px;
+  opacity: var(--grain-opacity);
+  pointer-events: none;
+}
+#dock.flip .quick {
+  right: auto;
+  left: calc(100% + 12px);
+  transform: translateY(-50%) translateX(-8px);
+}
+#dock:hover .quick,
+#dock.quick-open .quick {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) translateX(0);
+  transition-delay: 0s;
+}
+.quick input {
+  position: relative;
+  font-size: var(--fs-medium, 13px);
+}
+.quick input::placeholder {
+  color: rgba(29, 29, 31, 0.45);
+  opacity: 1;
+}
+
+/* ---------- 贴纸右上角收起按钮（悬停贴纸时浮现，不占版面） ---------- */
+
+.note-close {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  z-index: 5; /* 盖过边缘热区（z-index 4） */
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--motion-fast) ease,
+    background var(--motion-fast) ease;
+}
+#note:hover .note-close,
+#note .note-close:focus-visible {
+  opacity: 0.45;
+  pointer-events: auto;
+}
+#note .note-close:hover {
+  opacity: 1;
+  background: rgba(29, 29, 31, 0.06);
+}
+.note-close:active {
+  background: rgba(29, 29, 31, 0.1);
+}
+.note-close svg {
+  width: 10px;
+  height: 10px;
+  display: block;
+}
+
+/* ---------- 球⇄贴纸连续形变：两端同材质同锚点（主进程切窗保持窗口 x 不动，
+   贴纸在窗口内滑向/滑离球的元素位 x+BALL_INSET_X），形状与位置一条签名缓动同步插值，
+   内容交错进出场，无「消失再出现」 ----------
+   本块必须排在 body[data-form] 显隐规则之后：收起后半程窗口已是球尺寸，
+   贴纸要留在原地演完收尾（form-morphing 覆盖 display:none，平局后写者胜） */
+#note.morphing {
+  transition:
+    left var(--motion-morph) var(--ease-silk),
+    width var(--motion-morph) var(--ease-silk),
+    height var(--motion-morph) var(--ease-silk),
+    border-radius var(--motion-morph) var(--ease-silk);
+}
+/* 内容跟随形状交错进出场：展开时形状先动、内容逐层浮现；收起时内容先退场 */
+#note.morphing .goals {
+  transition:
+    opacity 250ms var(--ease-silk) 140ms,
+    transform 250ms var(--ease-silk) 140ms;
+}
+#note.morphing .divider {
+  transition:
+    opacity 250ms var(--ease-silk) 175ms,
+    transform 250ms var(--ease-silk) 175ms;
+}
+#note.morphing .tasks-wrap {
+  transition:
+    opacity 250ms var(--ease-silk) 210ms,
+    transform 250ms var(--ease-silk) 210ms;
+}
+#note.morphing .note-close {
+  transition:
+    opacity 220ms var(--ease-silk) 250ms,
+    background var(--motion-fast) ease;
+}
+/* 起始帧隐藏态（JS 先挂上、下一帧摘除，触发交错浮现）；close 按钮 !important 压过 hover 显形 */
+#note.morphing-in .goals,
+#note.morphing-in .divider,
+#note.morphing-in .tasks-wrap {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: none;
+}
+#note.morphing-in .note-close {
+  opacity: 0 !important;
+  transition: none;
+}
+/* 收起：内容快速退场，不参与形状收缩 */
+#note.morphing-out .goals,
+#note.morphing-out .divider,
+#note.morphing-out .tasks-wrap {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 110ms ease 0ms,
+    transform 110ms ease 0ms;
+}
+#note.morphing-out .note-close {
+  opacity: 0 !important;
+  transition: opacity 110ms ease 0ms;
+}
+/* 形变互斥：收起后半程（data-form 已是 ball）贴纸留在原地演完收尾，双方都不接事件 */
+body.form-morphing #note {
+  display: block;
+}
+body.form-morphing[data-form='ball'] #note,
+body.form-morphing[data-form='ball'] #dock {
+  pointer-events: none;
+}
+/* 展开时的临时 logo 替身：贴纸以 56px 圆出现时盖在球心，随形变溶解 */
+.morph-logo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+  background: var(--fg);
+  opacity: 0.9;
+  -webkit-mask: center / contain no-repeat;
+  mask: center / contain no-repeat;
+  pointer-events: none;
+  z-index: 6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick,
+  #fab {
+    transition-duration: 0.01ms !important;
+  }
+}

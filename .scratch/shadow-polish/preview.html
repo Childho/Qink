@@ -1,0 +1,77 @@
+<!doctype html>
+<!-- 阴影收敛（ADR-0008）视觉验证页：复用真实 style.css，摆出全部带影表面。
+     仅两处预览本地覆盖：强制显示 #dock、窗口背景铺壁纸。不改动产品代码。 -->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>阴影体系预览</title>
+  <link rel="stylesheet" href="../../src/renderer/src/style.css" />
+  <style>
+    /* 预览本地覆盖：真实 CSS 里 #dock 由 body[data-form='ball'] 控制，这里直接摆出来 */
+    #dock { display: block; }
+    /* 桌面壁纸：优先系统壁纸，加载失败落到饱和渐变（最严苛背景） */
+    .desk {
+      background-image: url('./wallpaper.jpg'),
+        linear-gradient(135deg, #38bdf8 0%, #0ea5e9 35%, #f59e0b 75%, #ef4444 100%);
+      background-size: cover, cover;
+      background-position: center;
+    }
+    .tag {
+      position: absolute;
+      font: 12px/1.4 Consolas, monospace;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.55);
+      padding: 3px 8px;
+      border-radius: 4px;
+      z-index: 99;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="desk" style="position: relative; width: 100vw; height: 100vh; overflow: hidden">
+
+    <!-- 便签（真实结构与类名） -->
+    <div id="note">
+      <button class="note-close" tabindex="-1" style="opacity:.45">
+        <svg viewBox="0 0 10 10"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
+      <div class="goals">
+        <div class="goal" data-kind="quarter"><span class="plabel">季</span><span class="gtext">把 Qink 做到能安心发给朋友用</span></div>
+        <div class="goal" data-kind="month"><span class="plabel">月</span><span class="gtext">九月收尾：阴影体系 + 装机包</span></div>
+        <div class="goal" data-kind="week"><span class="plabel">周</span><span class="gtext">阴影收敛、验收截图、写 ADR</span></div>
+      </div>
+      <div class="divider"></div>
+      <div class="tasks">
+        <div class="task pinned"><button class="circle" tabindex="-1"></button><span class="text">标记置顶：写 ADR-0008</span><span class="due-hint">今天</span></div>
+        <div class="task urgent"><button class="circle" tabindex="-1"></button><span class="text">逾期：回朋友的安装包反馈</span></div>
+        <div class="task rolled drag-sorting"><button class="circle" tabindex="-1"></button><span class="text">滚入：拖动行阴影演示</span></div>
+        <div class="task"><button class="circle" tabindex="-1"></button><span class="text">普通任务：核对窗口边缘无裁切</span></div>
+      </div>
+      <div class="composer-hint" tabindex="-1" style="margin-top:14px">＋ 速记一条…</div>
+    </div>
+    <span class="tag" style="left:56px; top:478px">#note — shadow-float 10/28/.16 + 2/6/.08</span>
+
+    <!-- 悬浮球 + 速记胶囊（quick-open 强制展开） -->
+    <div id="dock" class="quick-open" style="--ball-inset-x: 620px">
+      <button id="fab"><span class="logo" style="border-radius:6px; background:rgba(29,29,31,.12)"></span>
+        <svg class="crack" viewBox="0 0 56 56"><path d="M28 8l-5 12 7 9-4 10" fill="none" stroke="#dc2626" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <div class="quick"><input placeholder="速记一条，回车碎进球里…" /></div>
+    </div>
+    <span class="tag" style="left:620px; top:104px">#fab — shadow-float（hover/lifting 换 shadow-raised）</span>
+    <span class="tag" style="left:360px; top:52px">.quick — shadow-overlay</span>
+
+    <!-- 右键菜单：压在便签右下缘，一半在便签上、一半在桌面上 -->
+    <div id="menu" style="left: 250px; top: 400px">
+      <div class="menu-item checked">✓ 小尺寸</div>
+      <div class="menu-item">中尺寸</div>
+      <div class="menu-item">大尺寸</div>
+      <div class="menu-sep"></div>
+      <div class="menu-item">已完成清单</div>
+      <div class="menu-item">退出 Qink</div>
+    </div>
+    <span class="tag" style="left:250px; top:548px">#menu — shadow-overlay 8/24/.18</span>
+  </div>
+</body>
+</html>
