@@ -2,6 +2,7 @@
 
 :root {
   --fg: #4f5134;
+  --fg-strong: #3f4126; /* 纲领文字深档墨橄榄：衬线季/月/周目标用 */
   --hairline: rgba(63, 65, 38, 0.1);
   --hairline-strong: rgba(63, 65, 38, 0.16);
   --radius-md: 12px;
@@ -9,6 +10,7 @@
   --tracking-display: -0.015em;
   --accent: #c96442; /* 滚入任务身份色（spec）：砖橙 */
   --accent-ink: #8f3f24;
+  --khaki: #ded6b6; /* 交互反馈底：hover 家族卡其（color-mix 低透明度用） */
   --violet: #7c3aed; /* 标记任务身份色（双击标记置顶） */
   --violet-ink: #5b21b6;
   --danger: #dc2626; /* 紧急/逾期任务身份色（M15：时间的客观紧迫） */
@@ -41,6 +43,8 @@
   --note-font-text:
     'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei',
     sans-serif;
+  /* 衬线纲领字：季/月/周目标文本与小标签（印刷品气质），系统宋体族零打包 */
+  --font-serif: 'Songti SC', 'STSong', 'SimSun', 'Noto Serif SC', serif;
   /* 签名缓动：全站过渡共用一条「快出缓停」曲线（形变/滑条/任务行进出同一气质） */
   --ease-silk: cubic-bezier(0.32, 0.72, 0, 1);
   --motion-morph: 460ms;
@@ -147,6 +151,7 @@ body {
   flex: none;
   width: 1.4em;
   font-size: 10px;
+  font-family: var(--font-serif);
   font-weight: 500;
   letter-spacing: 0.14em;
   opacity: 0.55;
@@ -154,6 +159,12 @@ body {
 
 .gtext {
   word-break: break-all;
+}
+/* 衬线纲领字 + 深档墨橄榄只给真实目标文本；空态引导语（ghost 占位复用 .gtext）
+   排除在外，保持无衬线淡字不抢戏（spec：操作区/引导语可读性优先） */
+.goal:not(.ghost) .gtext {
+  font-family: var(--font-serif);
+  color: var(--fg-strong);
 }
 
 .goal[data-kind='quarter'] {
@@ -263,7 +274,7 @@ body {
     background-color var(--motion-fast) ease;
 }
 .task:hover {
-  background: rgba(63, 65, 38, 0.04);
+  background: color-mix(in srgb, var(--khaki) 55%, transparent);
 }
 .task.completing {
   opacity: 0;
@@ -382,7 +393,7 @@ body {
   z-index: 3;
   cursor: grabbing;
   border-radius: 6px;
-  background: color-mix(in srgb, white 42%, transparent);
+  background: color-mix(in srgb, var(--khaki) 45%, transparent);
   box-shadow: var(--shadow-inline);
   will-change: transform;
 }
@@ -612,10 +623,10 @@ input::placeholder {
 }
 
 .menu-item:hover {
-  background: rgba(63, 65, 38, 0.06);
+  background: color-mix(in srgb, var(--khaki) 50%, transparent);
 }
 .menu-item:active {
-  background: rgba(63, 65, 38, 0.1);
+  background: color-mix(in srgb, var(--khaki) 75%, transparent);
 }
 
 .menu-item.checked {
@@ -691,7 +702,7 @@ button { font: inherit; color: inherit; border: 0; background: transparent; curs
 .archive-toolbar { display: flex; align-items: center; gap: 4px; flex: none; }
 .archive-toolbar .archive-date { flex: 1; padding-left: 0; }
 .archive-nav { border-radius: 6px; padding: 4px 6px; font-size: 11px; }
-.archive-nav:hover { background: rgba(63,65,38,.06); }
+.archive-nav:hover { background: color-mix(in srgb, var(--khaki) 50%, transparent); }
 .archive-nav:disabled { opacity: .2; cursor: default; }
 .archive-help { font-size: 10px; opacity: .55; padding-left: 24px; }
 @media (prefers-reduced-motion: reduce) {
@@ -894,10 +905,11 @@ body[data-form='ball'] #dock {
 }
 #note .note-close:hover {
   opacity: 1;
-  background: rgba(63, 65, 38, 0.06);
+  background: color-mix(in srgb, var(--khaki) 50%, transparent);
+  color: var(--accent); /* 砖橙悬停提示（svg stroke=currentColor 跟随） */
 }
 .note-close:active {
-  background: rgba(63, 65, 38, 0.1);
+  background: color-mix(in srgb, var(--khaki) 75%, transparent);
 }
 .note-close svg {
   width: 10px;
