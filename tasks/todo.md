@@ -440,3 +440,32 @@ vitest 35/35 ✅（新增 mist 5 项）；typecheck ✅。dev 实机（Win10 256
 - [x] **托盘置顶勾选已被用户实测**：dev 验证窗口内 qink.log 留下两条 `[pin]` 切换记录（13:00:42 off → 13:00:47 on），事件、持久化、勾选态全部正常
 - [x] 分发副本更新：`E:\下载\Qink-Setup-0.2.0.exe`（旧 0.1.0 副本已移除）
 - **待用户确认**：真实键盘 Win+D 效果（ToggleDesktop 程序等价物已通过）
+
+## 失焦自动收起（blur-collapse，2026-10-11 交付）
+
+用户需求：贴纸展开期间点击页面外区域（桌面/其他应用）→ 自动收起成悬浮球。开发于 mac 环境（Windows 装机验证待做）。
+
+- [x] 主进程 `win.on('blur')` 事件源：note 形态失焦 → 250ms 挂起后 IPC `qink:blur-collapse` 推送；到期二次核对焦点（250ms 内点回不收）；devtools 抢焦点不收（调试常态）
+- [x] 挂起可撤销（承重墙）：托盘点击/第二实例抬前（`showNote`）与右键托盘弹菜单都发生在 blur 之后——不撤销则「点托盘聚焦贴纸」会被误判成「点外部」反把贴纸收掉；Windows 托盘 click 松开才发，250ms 覆盖绝大多数点击时长
+- [x] 渲染层：收通知 → `closeMenu()`（外部点击到不了页面 click 监听）→ `setForm('ball','blur')`，与手动 ×/Escape/M16 空闲同路（含落盘与 `form {by: blur}` 诊断留痕）
+- [x] 刻意不做输入框/归档排除（与 M16 不同）：blur 本身就是「人已离开」信号；速记半截内容是 DOM 状态，形变不销毁 DOM，展开即恢复零损失
+- [x] spec：`.scratch/blur-collapse/spec.md`（含决策表）
+- [x] 验证：typecheck 零错误 · vitest 62/62 · mac 运行态实测（qink.log 时间线）：启动后自然 blur 收起 → 用户双击球展开（by:dblclick）→ 再 blur 收起，两收一展全链路留痕；noteMode=ball 落盘跨重启生效
+- **未验证/边界**：Windows 托盘左键（click 抬前撤销）与右键（菜单弹出撤销）需真鼠标，代码路径经审查未实跑；~~打包装机待做（与下次迭代合并）~~ → 0.3.0 安装包已随暖纸换肤一并产出（2026-10-11，mac 交叉打包），装机与托盘两路径待用户在 Windows 实测
+
+## 暖纸换肤 warm-restyle（2026-10-11 交付于分支 feat/warm-restyle）
+
+用户认为 UI 过于简约普通，参考其个人网站配色（奶油米 #f0edda + 墨橄榄 #4f5134 + 砖橙 #c96442 + 卡其 #ded6b6）做特色化。grilling 两轮逐题确认，spec 见 `.scratch/warm-restyle/spec.md`。核心：换 token + 少量点缀，不动版式/几何/交互；毛玻璃被用户明确否决（lessons 2026-10-11）。
+
+- [x] `style.css :root` 色板换值（spec 映射表）+ `--amber/--amber-ink` 改名 `--accent/--accent-ink`（文件内机械替换）
+- [x] hairline/勾边/阴影四档/shatter 碎屑裂纹 换橄榄墨同源 `rgba(63,65,38,…)`，浓度与结构不动（ADR-0008 框架内）
+- [x] 衬线：新增 `--font-serif`，应用于 `.gtext`（配 `--fg-strong #3f4126`）与 `.plabel`；ghost 引导语经 `.goal:not(.ghost) .gtext` 排除（实现期拦截的泄漏）
+- [x] 点缀：任务行 hover 淡卡其、收起钮 hover 砖橙、拖起行暖底、速记胶囊微卡其底（composer 无底可上，暖化随 token 达成，裁定留痕 ticket 02）
+- [x] `--violet`/`--danger` 不动（红>紫>橙语义层级保辨识度）
+- [x] 验收：typecheck 零错误 · vitest 62/62（四轮）· 产物 CSS 断言（新值 7 命中/旧值 0）· mac dev 截图（`.scratch/warm-restyle/evidence/note-form.png`：奶油底/衬线目标/砖橙滚入/置顶紫全对）· 状态矩阵不回归
+- [x] code-review 两轴评审 + 修复（commit d0a3ddf）：阴影注释如实化（线影墨 --fg-strong 同源、与正文墨分档）+ ADR-0008 修订注；`.quick` 微卡其底落地点缀④；shatter 墨色注释。评审怀疑的 quarter font-family 死声明核实为 ghost 排除的承重墙，保留
+- [ ] Windows 装机（0.3.0 安装包已产出：mac 交叉打包，2026-10-11）；SimSun 小字观感与真实壁纸效果装机后定（回退路线：仅 .gtext 衬线）
+
+### Review（2026-10-11）
+
+分支 feat/warm-restyle 5 提交（96706fc 立项 / 427684a 色值层 / b3f8826 排印层 / 862d1bf ticket 关闭 / d0a3ddf 评审修复），未合入 main。运行态实测顺带验证 blur-collapse 全链路（blur 收球→双击展开→× 收起，diag 三事件）。种子验证插曲：一条非法形态的 dueAt（明天+时刻）被 dueStatus 防御分支正确判 future，非缺陷。现场管理：data.json 备份→逐字节还原（sha 一致）、临时文件清场、无孤儿进程。待用户：真机看衬线观感与 hover 手感；合并与装机节奏待定。
