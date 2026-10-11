@@ -184,8 +184,8 @@ export function crackSVG(glass: CrackPattern, w: number, h: number): SVGSVGEleme
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
   svg.setAttribute('viewBox', `0 0 ${w} ${h}`)
   svg.classList.add('cracks')
-  // 裂纹墨：橄榄墨同源（比 --fg-strong 再浅半档，保持碎片线/撞击点与 token 墨的原有层级），
-  // 暖纸换肤起与 style.css 墨色家族联动改值（下两处 rgba）
+  // 裂纹墨：橄榄墨同源（与 --fg-strong rgb(63,65,38) 近同档、微深约 2%，碎片线/撞击点与 token 墨保持低对比层级；
+  // 旧配色时屑比墨浅，换肤后方向反转——此处以实测观感为准），暖纸换肤起与 style.css 墨色家族联动改值（下两处 rgba）
   for (const st of glass.strokes) {
     const pts = st.seg.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')
     const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline')
