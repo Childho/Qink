@@ -1,6 +1,6 @@
 # 02 · 排印层：衬线纲领 + 卡其点缀
 
-Status: ready-for-agent
+Status: resolved
 Blocked by: 01
 Blocks: 03
 
@@ -23,3 +23,11 @@ spec 见 `../spec.md`（结构点缀清单与字体决策为依据）。
 
 - grep：无 `29, 29, 31` 的 hover 残留（circle 系已归橄榄墨，属 01 范围）；白色系仅剩有意保留项并逐条说明。
 - `npm run typecheck` 零错误；`npm test` 62/62。
+
+## Comments
+
+- 实现（commit b3f8826）：三 token 就位；衬线上 `.gtext`/`.plabel`；hover 家族五处换卡其；note-close 图标砖橙（svg stroke=currentColor 自动跟随）；drag-sorting 换暖底。
+- **实现中的关键拦截**：ghost 空态引导语复用 `.gtext` 类，ticket 字面执行会让衬线泄漏到引导语、违反第 5 条——改为 `.goal:not(.ghost) .gtext` 作用域，字体与深档色一并排除，ghost 外观零变化（实现者发现，主线复核正确）。
+- **主线合并补丁**：实现者上报 `.note-close:active` 仍是橄榄墨 10%（ticket 清单遗漏），与卡其 hover 不连贯——按 menu-item 同款 75% 卡其归位后提交。
+- 白色系保留清单（全部为碎裂动画玻璃材质信息，非表面色）：`.shard-edge` 内缘白描边、`.shard-tint` 琉璃淡染、`.shard-glint` 扫掠渐变。
+- 验收：`29, 29, 31` 零命中；typecheck 零错误；vitest 62/62。
