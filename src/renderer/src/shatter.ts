@@ -189,7 +189,7 @@ export function crackSVG(glass: CrackPattern, w: number, h: number): SVGSVGEleme
     const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline')
     polyline.setAttribute('points', pts)
     polyline.setAttribute('fill', 'none')
-    polyline.setAttribute('stroke', 'rgba(50, 50, 55, 0.65)')
+    polyline.setAttribute('stroke', 'rgba(58, 60, 40, 0.65)')
     polyline.setAttribute('stroke-width', String(st.width))
     svg.appendChild(polyline)
   }
@@ -198,7 +198,7 @@ export function crackSVG(glass: CrackPattern, w: number, h: number): SVGSVGEleme
   dot.setAttribute('cx', glass.impact[0].toFixed(1))
   dot.setAttribute('cy', glass.impact[1].toFixed(1))
   dot.setAttribute('r', '2')
-  dot.setAttribute('fill', 'rgba(45, 45, 50, 0.55)')
+  dot.setAttribute('fill', 'rgba(53, 55, 38, 0.55)')
   svg.appendChild(dot)
   return svg
 }
