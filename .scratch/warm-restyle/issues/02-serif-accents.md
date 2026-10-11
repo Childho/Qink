@@ -31,3 +31,5 @@ spec 见 `../spec.md`（结构点缀清单与字体决策为依据）。
 - **主线合并补丁**：实现者上报 `.note-close:active` 仍是橄榄墨 10%（ticket 清单遗漏），与卡其 hover 不连贯——按 menu-item 同款 75% 卡其归位后提交。
 - 白色系保留清单（全部为碎裂动画玻璃材质信息，非表面色）：`.shard-edge` 内缘白描边、`.shard-tint` 琉璃淡染、`.shard-glint` 扫掠渐变。
 - 验收：`29, 29, 31` 零命中；typecheck 零错误；vitest 62/62。
+- **code-review 裁定补录（主线）**：点缀④「composer 与胶囊微卡其底」的实现解释权裁定——composer 是透明行内输入、无底可言，其暖化已随 token 达成；「微卡其底」落在速记胶囊 `.quick`（khaki 25% 混奶油，commit 见评审修复提交）。spec 轴评审指出的缺口就此关闭。
+- **评审修复（同 commit）**：阴影注释如实化（--fg-strong 同源，正文墨分档）+ ADR-0008 修订注 + shatter 墨色注释；评审怀疑的 `.goal[data-kind=quarter]` font-family 死声明经核实**不是死代码**（ghost 态 .gtext 与编辑态输入框靠它继承无衬线），保留。
