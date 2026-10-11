@@ -376,3 +376,67 @@ vitest 35/35 ✅（新增 mist 5 项）；typecheck ✅。dev 实机（Win10 256
 - [x] 门面：README（中文，含便签/悬浮球截图）、MIT LICENSE、package.json 去 private 补 repository/license/author
 - [x] 验证：npm test 52/52 ✅ · typecheck ✅；远端核对公开可见、MIT 识别、无缓存/敏感文件混入、本地与远端提交一致
 - 仓库地址：https://github.com/Childho/Qink
+
+## 产品×工程全面审查 · 第二轮（2026-10-09）
+
+产出 `docs/review/06-product-audit-2026-10.md`。审查方式：4 路并行子代理深读 + 关键证据人工复核 + 真实使用数据取证 + 运行态观测（未启 dev，避免与正式版双写 data.json）。
+
+**关键发现（详见报告）**：
+- P0×2：①核心目标在唯一真实用户桌面当前全部为空（季/月从未写过、周目标停在 W40，今天 W41）——「天天被看见」落空，根源是翻篇后无善后；②主备双坏时静默清零并立即覆盖现场（store.ts 恢复链 + 启动自愈落盘）
+- P1×5：非原子写+退出不 flush、删除无撤销（9/11 旧账）、毛玻璃已在 a3ffa6f 静默删除但 README/package.json 仍宣称（3 篇 ADR 未标废弃）、双击球展开可发现性×10 分钟自动收起复合风险、滚入任务无上限无老化（真实数据 6/7 为滚入旧任务）
+- 9/11 五篇审查的 P1×4 一个月后零修复；main.ts 1088→1655 行、状态源渲染层测试为零
+- 下一轮迭代 6 项（数据耐久→目标翻篇善后→删除撤销→球单击反馈→滚入老化→材质叙事对齐）；最终裁决：先做数据耐久三件套（存在性问题优先于价值性问题，目标善后需先经作者方案拷问）
+
+## 迭代①数据耐久三件套（2026-10-09 交付，ADR-0009）
+
+审查报告 P0-2 + P1-1 的修复：把「一次异常可能丢掉全部数据」变成结构性不可能。
+
+- [x] `src/main/store-io.ts`（新建）：持久化核心，不依赖 electron、路径注入可测——原子写（`.tmp` + fsync + rename 顶替，主/备两份一致策略）、坏档留证（读不出/非对象 → 改名 `.corrupt` 保现场；主→备→空白恢复链；ENOENT=首次运行不打扰）、退出冲刷（同步版原子写，清防抖定时器）
+- [x] `src/main/store.ts` 重写为接线层（API 不变：loadData/getData/setData/queueSave/defaultData，新增 flushPendingSync 与 LoadOutcome）
+- [x] `src/main/index.ts`：双坏时原生对话框告知用户（坏档位置 + 已从空白开始）；`before-quit` 冲刷挂起的防抖写
+- [x] `tests/store.test.ts`（新建 10 例）：恢复链全分支、坏档逐字留证、防抖合并、双写一致、rename 顶替、无 .tmp 残留、冲刷同步性与幂等
+- [x] 验证：typecheck 零错误 · vitest 62/62（52 旧全绿 + 10 新）· `npm run build` ✅
+- **未做运行态装机验证**：安装版正在运行且与 dev 共写同一 data.json（既有教训），完整首启/退出路径留待下次打包装机一并验证（读取旧版合法 JSON 走 source:'main' 正常路径，无迁移动作）。装机前需 `npm run package`（带两个镜像变量）。
+
+### Review（2026-10-09）
+
+三件套对应审查三证据点逐一闭环：`store.ts:62` 非原子 writeFile → tmp+fsync+rename（store-io.ts writeFileAtomic/Sync）；`store.ts:36`+`index.ts:43` 双坏静默清零覆盖现场 → 留证 .corrupt + 对话框 + 恢复链单测钉住；`index.ts:50-52` 退出只置标志 → before-quit flushPendingSync。M4 真实事故场景（文档目录被外部删、备份独活）有专门用例。设计取舍（fsync 成本、Windows 强关机由原子写兜底、schema 校验另案）记入 ADR-0009。
+
+## 迭代②「图标消失」防御加固 + 现场诊断日志（2026-10-09 交付）
+
+装机用户反馈「图标没过一会就消失不见了」+ 截图（桌面只剩悬浮球）。诊断：代码层排除托盘 GC/自隐藏/主进程崩溃路径后锁定 4 假设——H1 用户把「贴纸收成球」当消失（产品问题，即审查迭代④）、H2 睡眠/锁屏/显示器变化后透明窗掉渲染、H3 渲染层死亡成僵尸（透明窗=物理级隐形）、H4 整进程退出。H3 用红→绿反馈环实锤并修复（`forcefullyCrashRenderer` 临时触发器，已删）：崩溃后渲染层无人救、窗口永久隐形；修复后 123ms 自愈。
+
+- [x] `src/main/diag.ts`（新建）：现场诊断日志——stdout+`userData/qink.log` 双写、512KB 启动轮转、永不抛错；记 boot/quit/win-hidden/崩溃/自愈/电源/显示器/形态切换
+- [x] 渲染层死亡自愈：`render-process-gone` → reload（UI 无状态、数据在主进程，无损）；60s 内 >3 次连崩退避停手防崩溃风暴
+- [x] H2 防御：`powerMonitor` resume/unlock-screen → 轻推重合成（宽度+1 复原）+ `display-metrics-changed`/`display-removed` → 回钳主显示器工作区（`reclamp`，位移留痕）
+- [x] H4 留痕：`uncaughtException`/`unhandledRejection` 落日志后继续运行（小组件可用性优先）；`child-process-gone`（GPU）留痕
+- [x] 诊断通道：托盘「打开日志文件夹」菜单；渲染层上报 `renderer-boot`（形态/任务数）与 `setForm` 原因（idle/close-btn/escape/dblclick/menu-archive）——下次现场报告直接对时间线分辨 H1/H2/H3/H4
+- [x] 验证：红灯（崩溃后无 renderer-boot 复现僵尸）→ 绿灯（123ms 自愈）→ typecheck · vitest 62/62 · 冒烟启动无错误、qink.log 正常落盘
+- **诚实的边界**：睡眠唤醒/锁屏路径本机无法安全模拟，轻推重合成按社区标准做法实现、未经真机睡眠验证；H1（球单击零反馈）是产品问题留待审查迭代④；**尚未打包装机**（与迭代①一并打包）
+
+### Review（2026-10-09）
+
+修复逻辑落在主进程（Electron 事件接线），vitest 无合适测试缝（无 electron 运行时），回归验证走「临时崩溃触发器红→绿」实跑闭环，触发器已删（`grep DEBUG-crash-loop` 零命中）；诊断日志的形态/原因事件是下次分辨四假设的唯一现场证据，装机后第一件观察事项。
+
+## 迭代③托盘置顶/取消置顶 + 幽灵菜单项清理（2026-10-09 交付）
+
+用户需求：删除审查确认的幽灵菜单项「显示贴纸」（右键菜单行为与托盘左键单击完全重复，仅剩抬前效果）；新增托盘「置顶」复选项——贴纸/球浮在所有窗口上方，Win+D 显示桌面也压不住。
+
+- [x] 删除托盘「显示贴纸」菜单项（`showNote()` 保留：托盘左键与二次启动唤醒仍在用）；托盘菜单改为按状态构建（`buildTrayMenu`），置顶切换后整体重建刷新勾选态
+- [x] 置顶状态机（`setAlwaysOnTopState`/`applyAlwaysOnTop`）：`setAlwaysOnTop(on, 'screen-saver')` 最高 z 序层级；`settings.alwaysOnTop` 持久化（可选字段，老数据无字段=关；默认关保持出厂行为）
+- [x] Win+D 防御：「显示桌面」会最小化包括 topmost 在内的所有窗口 → `minimize` 事件里置顶开启时立即 `restore()` 并重申层级；本应用无边框无任务栏项、无用户主动最小化入口，不误伤
+- [x] 状态源反向同步（承重墙）：渲染层每次编辑全量推送、主进程对 settings 整体替换——托盘切换后主进程 `webContents.send('qink:always-on-top')`，渲染层 `onAlwaysOnTop` 更新本地 data，否则用户下一次任何编辑就把置顶状态悄悄冲掉
+- [x] 验证：typecheck 零错误 · vitest 62/62 · 运行态实测（停装机实例 → 备份 data.json → alwaysOnTop=true 启动 dev）：窗口 TOPMOST 样式位在位；PowerShell ToggleDesktop（Win+D 程序等价物）两轮后窗口仍置顶、可见、未最小化；退出后 alwaysOnTop=true 落盘；原始数据已恢复、装机实例已重启
+- **未验证/边界**：真实键盘 Win+D（与 ToggleDesktop 理论等价，待用户装机后确认）；托盘右键勾选交互无法程序化模拟（代码路径经审查）；restore 理论上可能有一帧闪烁（便签小，实测无感）；**尚未打包装机**（与迭代①②一并打包）
+
+## 打包装机 0.2.0（2026-10-09 13:16）
+
+迭代①②③随版本 0.2.0 一并装机。版本号 0.1.0 → 0.2.0（三迭代实质变更 + qink.log boot 行记版本可验证装机生效）。
+
+- [x] 打包：双镜像变量一次通过（本次未遇杀毒锁）；产物 `Qink-Setup-0.2.0.exe` + Portable + blockmap
+- [x] asar 内容校验：`qink:always-on-top` 通道 / `screen-saver` 层级 / `onAlwaysOnTop` 监听 / store-io 原子写 / diag 全在包内；「显示贴纸」已清除
+- [x] 装机：杀旧版 4 进程 → `/S` 静默安装 → exe 版本 0.2.0 → 自启运行（4 进程）
+- [x] 验证：qink.log boot `{"ver":"0.2.0"}`；renderer-boot form=ball tasks=7；数据完整（7 任务、alwaysOnTop 未设=关，尊重老数据）
+- [x] **托盘置顶勾选已被用户实测**：dev 验证窗口内 qink.log 留下两条 `[pin]` 切换记录（13:00:42 off → 13:00:47 on），事件、持久化、勾选态全部正常
+- [x] 分发副本更新：`E:\下载\Qink-Setup-0.2.0.exe`（旧 0.1.0 副本已移除）
+- **待用户确认**：真实键盘 Win+D 效果（ToggleDesktop 程序等价物已通过）

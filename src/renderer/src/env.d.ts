@@ -24,6 +24,8 @@ declare global {
     /** 主显示器工作区（惯性投掷的贴边反弹边界，与主进程拖动夹取同源） */
     workArea(): Promise<QinkRect>
     quit(): void
+    /** 诊断事件上报（boot 完成/形态切换原因等），主进程落 qink.log——现场报告对时间线用 */
+    diag(event: string, detail?: unknown): void
     ignoreMouse(ignore: boolean): void
     dragStart(): void
     dragMove(dx: number, dy: number): void
@@ -33,6 +35,8 @@ declare global {
      *  Promise 在主进程切完窗后 resolve——形变编排据此先切窗再揭幕 */
     setForm(mode: 'ball' | 'note'): Promise<void>
     onNoteCapped(cb: (height: number) => void): void
+    /** 托盘切换置顶后的反向同步：更新本地 data.settings.alwaysOnTop */
+    onAlwaysOnTop(cb: (on: boolean) => void): void
     onWinPos(cb: (x: number, y: number) => void): void
   }
 

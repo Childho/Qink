@@ -8,9 +8,9 @@
 - 技术栈：Electron 38 + electron-vite 5 + TypeScript，原生 DOM 无前端框架
 - 目录：`src/main`（窗口/托盘/数据）· `src/preload`（IPC 桥）· `src/renderer`（UI/手势/动画）· `src/shared`（纯逻辑，单测覆盖）· `tests/`
 - 图标资产：品牌源图 `build/logo/qink.jpg` → `scripts/export-logo.ps1`（GDI+ 导出圆角片/墨色 Q）→ `scripts/gen-icons.mjs` / `gen-tray.mjs`（打包 exe ico、托盘与悬浮球 data URL）；`src/main/tray-icon.ts` 与 `src/renderer/src/logo.ts` 是生成物，勿手改
-- 数据：`文档\Qink\data.json`（AppData 留备份双写）
-- 注意：改主进程/preload 必须完全重启 dev——electron-vite 只对渲染层热更新
-- 当前状态：第一阶段（M1–M9）、UI 迭代（M10–M14、置顶排序、全面审查）、品牌 logo、任务截止时间（M15，2026-09-27：可选 dueAt、<24h 自动置顶红、逾期球裂缝，spec 在 `.scratch/task-due-time/`）、空闲自动收起（M16，2026-09-27：展开 10 分钟无交互收成悬浮球）已交付装机；阴影四档收敛（2026-09-27，ADR-0008：`:root` 四档墨色阴影 token，禁止元素自定参数）已交付装机；UI 丝滑动效修复与还原（2026-09-27：形态切换 216px 瞬移/展开吸附/min-height 托底/速记红裂缝闪现修复，任务行 hover 与按压反馈等细节还原，验收 `.scratch/ui-silk-restore/`）；安装包副本另存分发；已开源至 https://github.com/Childho/Qink（公开，MIT，2026-10-08 上传）；第二阶段（MCP）未开始
+- 数据：`文档\Qink\data.json`（AppData 留备份双写；读写策略在 `src/main/store-io.ts`：原子写/坏档留证 `.corrupt`/退出冲刷，ADR-0009）；诊断日志 `userData/qink.log`（`src/main/diag.ts`：boot/quit/崩溃自愈/电源/显示器/形态切换留痕，现场「消失」类反馈先看它对时间线）
+- 注意：改主进程/preload 必须完全重启 dev——electron-vite 只对渲染层热更新；dev 与装机版共用 `%APPDATA%\qink`（单实例锁互斥）：跑 dev 前先 `Stop-Process -Name Qink`，TaskStop 停 dev 会留孤儿 electron.exe 占锁（下次 dev 静默 exit 0 的元凶），一并清掉
+- 当前状态：第一阶段（M1–M9）、UI 迭代（M10–M14、置顶排序、全面审查）、品牌 logo、任务截止时间（M15，2026-09-27：可选 dueAt、<24h 自动置顶红、逾期球裂缝，spec 在 `.scratch/task-due-time/`）、空闲自动收起（M16，2026-09-27：展开 10 分钟无交互收成悬浮球）已交付装机；阴影四档收敛（2026-09-27，ADR-0008：`:root` 四档墨色阴影 token，禁止元素自定参数）已交付装机；UI 丝滑动效修复与还原（2026-09-27：形态切换 216px 瞬移/展开吸附/min-height 托底/速记红裂缝闪现修复，任务行 hover 与按压反馈等细节还原，验收 `.scratch/ui-silk-restore/`）；安装包副本另存分发；已开源至 https://github.com/Childho/Qink（公开，MIT，2026-10-08 上传）；产品×工程第二轮全面审查（2026-10-09，`docs/review/06-product-audit-2026-10.md`：P0×2=核心目标空窗/双坏清零，9/11 旧 P1 零修复，6 项迭代排序，最终裁决数据耐久优先）；迭代①数据耐久三件套已交付（2026-10-09，ADR-0009：原子写/坏档留证/退出冲刷，`store-io.ts` + store.test.ts 10 例、62/62 绿）；迭代②「图标消失」防御加固已交付（2026-10-09，装机用户反馈触发：渲染层死亡自愈 123ms/电源与显示器事件回钳+轻推重绘/异常留痕/qink.log 现场诊断，红→绿实跑验证）；迭代③托盘置顶/取消置顶已交付（2026-10-09：删幽灵菜单项「显示贴纸」，checkbox 置顶、`screen-saver` 最高层级、minimize 拦截抗 Win+D、持久化+渲染层反向同步，运行态实测通过）；**三迭代已随 0.2.0 打包装机（2026-10-09，分发副本 `E:\下载\Qink-Setup-0.2.0.exe`，用户已实测托盘置顶勾选）**；第二阶段（MCP）未开始
 
 ## 回答风格要求
 

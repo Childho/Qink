@@ -44,6 +44,8 @@ export interface QinkData {
     noteH: number | null
     /** 双形态（悬浮球 spec）：'note' = 展开贴纸，'ball' = 收起为 App logo 圆球 */
     noteMode: 'ball' | 'note'
+    /** 窗口置顶（2026-10-09）：托盘右键勾选切换，置顶时抗 Win+D；老数据无此字段视为关 */
+    alwaysOnTop?: boolean
   }
 }
 

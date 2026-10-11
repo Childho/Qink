@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, shell, Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, screen, shell, Tray } from 'electron'
 import { join } from 'node:path'
 import {
   ADAPTIVE_MIN_HEIGHT,
@@ -13,12 +13,13 @@ import {
   windowWidthForForm,
   windowHeightFor
 } from '../shared/window'
-import { getData, loadData, queueSave, setData } from './store'
+import { flushPendingSync, getData, loadData, queueSave, setData } from './store'
+import { diag, logDir } from './diag'
 import { TRAY_ICON_DATA_URL } from './tray-icon'
 import type { QinkData } from '../shared/dates'
 
-// 常驻模型（spec.md）：贴纸可关（隐藏不销毁），托盘是找回入口与退出入口；
-// 永不置顶；单实例；开机自启由右键抽屉开关；位置记忆在主显示器工作区内。
+// 常驻模型（spec.md）：关闭 = 收成悬浮球（窗口不隐藏不销毁），托盘左键 = 抬前聚焦；
+// 默认不置顶，托盘右键可切换置顶（置顶时抗 Win+D）；单实例；开机自启由右键抽屉开关；位置记忆在主显示器工作区内。
 
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -34,25 +35,75 @@ let noteForm: 'ball' | 'note' = 'note'
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
+  // 主进程异常留痕：默认行为是进程直接死、桌面全消失而现场无从得知原因。
+  // 记录后继续运行——桌面小组件可用性优先，落盘已有原子写保护（ADR-0009）
+  process.on('uncaughtException', (err) => {
+    diag('uncaughtException', { message: err.message, at: err.stack?.split('\n')[1]?.trim() })
+  })
+  process.on('unhandledRejection', (reason) => {
+    diag('unhandledRejection', { reason: String(reason) })
+  })
+
   app.on('second-instance', () => showNote())
 
   app.whenReady().then(async () => {
-    await loadData()
+    diag('boot', { ver: app.getVersion(), electron: process.versions.electron, platform: process.platform })
+    const outcome = await loadData()
+    // 双坏（主文件与备份都救不回来）必须让用户知道：数据从空白开始，坏档已留证可手动抢救
+    if (outcome.source === 'fresh' && outcome.quarantined.length > 0) {
+      dialog.showErrorBox(
+        'Qink：数据文件损坏',
+        '数据文件与备份都无法读取，已从空白重新开始。\n\n' +
+          '损坏的原件已保留在以下位置，如需抢救可手动打开查看：\n' +
+          outcome.quarantined.join('\n')
+      )
+    }
     const data = getData()
-    // 启动即落盘一次：文件缺失（被清理/误删）时立刻自愈重建
+    // 启动即落盘一次：文件缺失（被清理/误删）时立刻自愈重建；坏档已被留证，覆盖现场不销毁证据
     queueSave()
     app.setLoginItemSettings({ openAtLogin: data.settings.autostart })
     createWindow()
     createTray()
     wireIpc()
+
+    // 睡眠唤醒/锁屏解锁与显示器变化：透明窗在系统显示状态剧变后可能掉渲染或被移出屏外，
+    // 轻推重合成 + 拉回工作区（现场「图标消失」的防御路径，事件本身也留痕供对时间线）
+    powerMonitor.on('suspend', () => diag('power-suspend'))
+    powerMonitor.on('lock-screen', () => diag('power-lock'))
+    powerMonitor.on('resume', () => {
+      diag('power-resume')
+      nudgeRepaint()
+      reclampToWorkArea()
+    })
+    powerMonitor.on('unlock-screen', () => {
+      diag('power-unlock')
+      nudgeRepaint()
+      reclampToWorkArea()
+    })
+    screen.on('display-metrics-changed', () => {
+      diag('display-metrics-changed')
+      reclampToWorkArea()
+    })
+    screen.on('display-removed', () => {
+      diag('display-removed')
+      reclampToWorkArea()
+    })
   })
 
   app.on('before-quit', () => {
     isQuitting = true
+    diag('quit')
+    // 防抖窗口（300ms）内挂起的最后一次修改必须落盘：退出路径等不了异步回调
+    flushPendingSync()
   })
 
   // 托盘驻留：窗口全关不退出，退出只走托盘菜单 / 右键抽屉
   app.on('window-all-closed', () => {})
+
+  // GPU 等子进程异常留痕：GPU 崩溃虽常可自恢复，但透明窗表面可能因此掉渲染（「图标消失」候选路径）
+  app.on('child-process-gone', (_e, details) => {
+    diag('child-process-gone', { type: details.type, reason: details.reason })
+  })
 }
 
 function createWindow(): void {
@@ -85,6 +136,16 @@ function createWindow(): void {
 
   restorePosition()
 
+  // 置顶按持久化状态应用（默认关）。Win+D「显示桌面」会最小化包括 topmost 在内的
+  // 所有窗口（任务管理器置顶也会被压下），置顶开启时立即还原并重申层级，让 Win+D 失效；
+  // 本应用无边框无任务栏项，不存在用户主动最小化，不会误伤
+  applyAlwaysOnTop()
+  win.on('minimize', () => {
+    if (getData().settings.alwaysOnTop !== true) return
+    win?.restore()
+    win?.setAlwaysOnTop(true, 'screen-saver')
+  })
+
   win.on('ready-to-show', () => {
     win?.show()
     forwardPos() // 初始位置喂给玻璃层
@@ -95,7 +156,26 @@ function createWindow(): void {
     if (!isQuitting) {
       e.preventDefault()
       win?.hide()
+      diag('win-hidden', 'close→tray')
     }
+  })
+
+  // 渲染层死亡必须留痕并自愈：透明窗口渲染层没了 = 桌面上物理级隐形（「图标消失」路径）。
+  // reload 重建渲染层与合成表面（UI 无状态，数据都在主进程内存+磁盘，无损）；
+  // 60 秒内连崩 3 次以上视为环境性顽疾（显卡驱动等），停止无限重启只留痕，防崩溃风暴
+  const renderCrashes: number[] = []
+  win.webContents.on('render-process-gone', (_e, details) => {
+    diag('render-process-gone', { reason: details.reason, exitCode: details.exitCode })
+    if (isQuitting || details.reason === 'clean-exit') return
+    const now = Date.now()
+    while (renderCrashes.length && now - renderCrashes[0] > 60_000) renderCrashes.shift()
+    renderCrashes.push(now)
+    if (renderCrashes.length > 3) {
+      diag('render-reload-skipped', 'crash-loop')
+      return
+    }
+    diag('render-reload', 'auto')
+    win?.webContents.reload()
   })
 
   // 'move'（含程序化 setPosition）与 'moved' 都挂：保存幂等，queueSave 防抖合并
@@ -147,23 +227,73 @@ function restorePosition(): void {
   win.setPosition(pos.x - insetXForForm(noteForm), pos.y - NOTE_INSET_Y)
 }
 
+/** 显示器被拔/分辨率变化后：把窗口拉回主显示器工作区（存储位置就是最新位置，等价于钳制当前位） */
+function reclampToWorkArea(): void {
+  if (!win) return
+  const [x, y] = win.getPosition()
+  restorePosition()
+  const [nx, ny] = win.getPosition()
+  if (nx !== x || ny !== y) diag('reclamp', { from: [x, y], to: [nx, ny] })
+}
+
+/** 睡眠唤醒/解锁后轻推窗口：宽度 +1 再复原，强迫系统重新合成透明表面（透明窗掉渲染的标准自救） */
+function nudgeRepaint(): void {
+  if (!win) return
+  const b = win.getBounds()
+  win.setBounds({ ...b, width: b.width + 1 })
+  win.setBounds(b)
+}
+
 function createTray(): void {
   tray = new Tray(nativeImage.createFromDataURL(TRAY_ICON_DATA_URL))
   tray.setToolTip('Qink')
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: '显示贴纸', click: () => showNote() },
-      { type: 'separator' },
-      {
-        label: '退出',
-        click: () => {
-          isQuitting = true
-          app.quit()
-        }
-      }
-    ])
-  )
+  tray.setContextMenu(buildTrayMenu())
   tray.on('click', () => showNote())
+}
+
+/** 托盘菜单按当前置顶状态构建，切换后整体重建刷新勾选态 */
+function buildTrayMenu(): Menu {
+  return Menu.buildFromTemplate([
+    {
+      label: '置顶',
+      type: 'checkbox',
+      checked: getData().settings.alwaysOnTop === true,
+      click: (item) => setAlwaysOnTopState(item.checked)
+    },
+    // 现场排障入口：用户回传 qink.log 即可对「消失」时间线（ADR-0009 同期诊断能力）
+    { label: '打开日志文件夹', click: () => void shell.openPath(logDir()) },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        isQuitting = true
+        app.quit()
+      }
+    }
+  ])
+}
+
+/** 置顶开关唯一入口：落盘 + 应用窗口 + 反向同步渲染层 + 刷新托盘勾选。
+ *  必须推送给渲染层：它是状态源，后续 qink:data:set 全量推送会整体替换 settings，
+ *  不同步的话用户下一次任何编辑就把置顶状态悄悄冲掉 */
+function setAlwaysOnTopState(on: boolean): void {
+  const d = getData()
+  if (d.settings.alwaysOnTop !== on) {
+    d.settings.alwaysOnTop = on
+    queueSave()
+  }
+  diag('pin', { on })
+  applyAlwaysOnTop()
+  win?.webContents.send('qink:always-on-top', on)
+  tray?.setContextMenu(buildTrayMenu())
+}
+
+/** 把持久化置顶状态应用到窗口：screen-saver 是 Electron 最高 z 序层级，压过其他置顶窗口 */
+function applyAlwaysOnTop(): void {
+  if (!win) return
+  const on = getData().settings.alwaysOnTop === true
+  win.setAlwaysOnTop(on, 'screen-saver')
+  if (on) win.moveTop()
 }
 
 function showNote(): void {
@@ -177,6 +307,11 @@ function wireIpc(): void {
   ipcMain.handle('qink:data:set', (_e, incoming: QinkData) => {
     setData(incoming)
     savePosition()
+  })
+
+  // 渲染层诊断事件透传（boot 完成/形态切换及原因）：现场「消失」报告能对上时间线
+  ipcMain.on('qink:diag', (_e, event: unknown, detail?: unknown) => {
+    diag(String(event), detail)
   })
 
   // ---- 尺寸同步：渲染层上报便签目标尺寸（宽度恒久、高度=手动值或自适应期望值），

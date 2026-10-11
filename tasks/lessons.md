@@ -106,3 +106,13 @@
 2. **形变端点值会被 min-/max- 托底**：写 `height:56px` 不等于渲染 56px 高。形变期间要临时解除 min-/max- 约束，清理时恢复。
 3. 验证形变只能逐帧采样（rAF 里读 getBoundingClientRect），「起点/终点对了」不证明中间没跳；帧间位移上限按缓动峰值估（本例 460ms 走 216px → 帧差 ~32px，阈值 45px）。
 4. 同管线成对换算的教训（M14）换个形态又犯了一次：`form-change` 输入侧用了新形态 inset。旧账规则不变：改任何「锚点/边距换算」时，grep 同管线的每一对加减，输入侧用「换算前形态」的口径。
+
+## 2026-10-09 · 改 data.json 做运行态验证：PowerShell 5.1 的编码双坑
+
+**发生了什么**：迭代③验证要把 data.json 的 `alwaysOnTop` 置 true 再启动 dev。第一版用 PowerShell 5.1 的 `Get-Content | ConvertFrom-Json` 直接报 JSON 解析错——PS 5.1 对无 BOM 的 UTF-8 文件按 GBK 读，中文全成乱码破坏了引号结构（文件未被写入，无损失）；且 PS 5.1 的 `Set-Content -Encoding UTF8` 会写 BOM，而应用的 `JSON.parse` 不认 BOM 头，写回去整档会被判坏档进 `.corrupt` 恢复链。
+
+**规则**：
+
+1. **运行态验证要改 `文档\Qink\data.json` 时，用 Node 读写**（`JSON.parse` + `writeFileSync(..., 'utf8')`，无 BOM、与 app 自身写盘格式一致），不要用 PowerShell 5.1 的文本管道。记牢应用坏档判定链：BOM/编码坏 = 留证 .corrupt = 用户看到「数据损坏」弹窗。
+2. 同理适用于一切「外部工具改应用数据文件」的场景：先弄清应用怎么读（编码、BOM 容忍、解析器），再选写入工具，而不是想当然用系统默认。
+3. 改前必备份、验后必恢复原文件并删除备份残留——装机实例与 dev 共写同一文件，验证现场必须完全还原。

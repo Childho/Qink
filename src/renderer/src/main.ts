@@ -150,6 +150,12 @@ window.qink.onNoteCapped((h) => {
   }
 })
 
+// 托盘切换置顶后的反向同步：渲染层是状态源，本地 data 不更新的话，
+// 下一次 persist() 全量推送会把主进程里的置顶状态整体替换回旧值
+window.qink.onAlwaysOnTop((on) => {
+  if (data) data.settings.alwaysOnTop = on
+})
+
 new ResizeObserver(scheduleReport).observe(note)
 new MutationObserver(scheduleReport).observe(note, {
   childList: true,
@@ -171,9 +177,10 @@ function applyForm(): void {
   }
 }
 
-function setForm(next: 'ball' | 'note'): void {
+function setForm(next: 'ball' | 'note', by = 'unknown'): void {
   if (form === next || morphLock) return
   form = next
+  window.qink.diag('form', { to: next, by })
   noteActivity() // 形态切换即交互：展开瞬间起算新的空闲窗口，避免刚展开就被下一个 tick 收走
   data.settings.noteMode = next
   persist()
@@ -1007,7 +1014,7 @@ function blankMenu(x: number, y: number): void {
   const size = data.settings.fontSize
   openMenu(
     [
-      { label: '已完成清单', action: () => { if (form === 'ball') setForm('note'); openArchive() } },
+      { label: '已完成清单', action: () => { if (form === 'ball') setForm('note', 'menu-archive'); openArchive() } },
       { label: '', sep: true },
       { label: '字号 · 小', checked: size === 'small', action: () => setFontSize('small') },
       { label: '字号 · 中', checked: size === 'medium', action: () => setFontSize('medium') },
@@ -1080,7 +1087,7 @@ function wire(): void {
       }
     } else if (e.key === 'Escape') {
       // Escape 全局收起：菜单/归档/输入框各有自己的 Escape 处理，走到这里即贴纸空闲态
-      if (form === 'note' && !archive?.isOpen()) setForm('ball')
+      if (form === 'note' && !archive?.isOpen()) setForm('ball', 'escape')
     } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'h') {
       e.preventDefault()
       if (archive?.isOpen()) archive.close()
@@ -1155,7 +1162,7 @@ function wire(): void {
   const tickMs = Math.min(30_000, IDLE_COLLAPSE_MS / 2)
   setInterval(() => {
     updateBallCrack()
-    if (noteIdleExpired(Date.now())) setForm('ball')
+    if (noteIdleExpired(Date.now())) setForm('ball', 'idle')
     const k = dateKey(new Date())
     if (k !== lastDateKey) {
       lastDateKey = k
@@ -1614,7 +1621,7 @@ function wireBall(): void {
 
   dock.addEventListener('dblclick', (e) => {
     if ((e.target as Element).closest('.quick')) return
-    setForm('note')
+    setForm('note', 'dblclick')
   })
 
   quickInput.addEventListener('keydown', (e) => {
@@ -1634,7 +1641,7 @@ function wireBall(): void {
   quickInput.addEventListener('focus', () => dock.classList.add('quick-open'))
   quickInput.addEventListener('blur', () => dock.classList.remove('quick-open'))
 
-  closeBtn.addEventListener('click', () => setForm('ball'))
+  closeBtn.addEventListener('click', () => setForm('ball', 'close-btn'))
 }
 
 async function boot(): Promise<void> {
@@ -1650,6 +1657,7 @@ async function boot(): Promise<void> {
   wire()
   applyForm()
   updateBallCrack()
+  window.qink.diag('renderer-boot', { form, tasks: data.tasks.length })
 }
 
 void boot()

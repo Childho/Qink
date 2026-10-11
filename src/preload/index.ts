@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('qink', {
   workArea: (): Promise<{ x: number; y: number; width: number; height: number }> =>
     ipcRenderer.invoke('qink:work-area'),
   quit: (): void => ipcRenderer.send('qink:quit'),
+  /** 诊断事件上报（boot 完成/形态切换原因等），主进程落 qink.log——现场报告对时间线用 */
+  diag: (event: string, detail?: unknown): void => ipcRenderer.send('qink:diag', event, detail),
   ignoreMouse: (ignore: boolean): void => ipcRenderer.send('qink:mouse-ignore', ignore),
   dragStart: (): void => ipcRenderer.send('qink:drag-start'),
   dragMove: (dx: number, dy: number): void => ipcRenderer.send('qink:drag-move', dx, dy),
@@ -22,6 +24,10 @@ contextBridge.exposeInMainWorld('qink', {
   setForm: (mode: 'ball' | 'note'): Promise<void> => ipcRenderer.invoke('qink:form-change', mode),
   onNoteCapped: (cb: (height: number) => void): void => {
     ipcRenderer.on('qink:note-capped', (_e, h) => cb(h))
+  },
+  /** 托盘切换置顶后主进程反向同步：渲染层更新本地 data，防止下次全量推送把状态冲掉 */
+  onAlwaysOnTop: (cb: (on: boolean) => void): void => {
+    ipcRenderer.on('qink:always-on-top', (_e, on) => cb(on))
   },
   onWinPos: (cb: (x: number, y: number) => void): void => {
     ipcRenderer.on('qink:win-pos', (_e, x, y) => cb(x, y))
