@@ -125,3 +125,12 @@
 
 1. 讨论 Qink 底材质/质感时，前提永远是「不透明哑光纸面」；不再提 blur/acrylic/vibrancy 类方案。
 2. 文档里的产品形容词（如"毛玻璃"）不等于用户认可的特性。方案前提要对代码现状和用户最新表态校准，不要对措辞校准。
+
+## 2026-10-11 · mac 交叉打包 Windows 包：默认跟随主机架构出 arm64
+
+**发生了什么**：在 Apple Silicon mac 上 `npm run package -- --win` 打 NSIS 包，exit 0 全绿——但产物是 `win-arm64-unpacked`/`archs=arm64`，装机目标是 x64 机器根本装不上。electron-builder 不带 arch 参数时按主机架构推断，mac 检查的是"打包成功"，不是"装得上目标机"。
+
+**规则**：
+
+1. mac 上交叉打 Windows 包必须显式 `--win --x64`（或按目标机清单全列）；产物名不含 arch（`Qink-Setup-0.3.0.exe` 两架构同名），arm64 产物会被 x64 重打静默覆盖，肉眼不察觉就装机翻车。
+2. 出包后必验架构：`file dist/win-unpacked/Qink.exe` 应为 `x86-64`；同场校验 asar 内版本号与新代码标记（本次：blur-collapse 通道/新色值/旧值零残留）。
