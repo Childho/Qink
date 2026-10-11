@@ -38,6 +38,8 @@ declare global {
     /** 托盘切换置顶后的反向同步：更新本地 data.settings.alwaysOnTop */
     onAlwaysOnTop(cb: (on: boolean) => void): void
     onWinPos(cb: (x: number, y: number) => void): void
+    /** 失焦收起通知：贴纸展开时点击窗口外 250ms 后触发（挂起期内托盘抬前已在主进程撤销） */
+    onBlurCollapse(cb: () => void): void
   }
 
   interface Window {

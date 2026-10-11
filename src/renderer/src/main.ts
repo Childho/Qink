@@ -156,6 +156,16 @@ window.qink.onAlwaysOnTop((on) => {
   if (data) data.settings.alwaysOnTop = on
 })
 
+// 失焦自动收起（blur-collapse spec）：主进程在窗口失焦 250ms 后推送（挂起期内
+// 托盘抬前/焦点回流已在主进程就地撤销）。收起与手动 × / Escape / 空闲同路；
+// 速记输入一半的内容是 DOM 状态，形变不销毁 DOM，展开即恢复，零损失。
+// 与 M16 空闲收起不同，不做输入框/归档排除：点外部本身就是「人已离开」的明确信号。
+window.qink.onBlurCollapse(() => {
+  if (form !== 'note' || morphLock) return // 球形态/形变中无事可做
+  closeMenu() // 点外部到不了页面 click 监听，菜单若开着在此一并关
+  setForm('ball', 'blur')
+})
+
 new ResizeObserver(scheduleReport).observe(note)
 new MutationObserver(scheduleReport).observe(note, {
   childList: true,

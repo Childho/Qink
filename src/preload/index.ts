@@ -31,5 +31,9 @@ contextBridge.exposeInMainWorld('qink', {
   },
   onWinPos: (cb: (x: number, y: number) => void): void => {
     ipcRenderer.on('qink:win-pos', (_e, x, y) => cb(x, y))
+  },
+  /** 失焦收起通知：贴纸展开时点击窗口外 250ms 后触发（挂起期内托盘抬前已在主进程撤销） */
+  onBlurCollapse: (cb: () => void): void => {
+    ipcRenderer.on('qink:blur-collapse', () => cb())
   }
 })

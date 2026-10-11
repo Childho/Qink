@@ -25,6 +25,8 @@ let win: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
 let dragAnchor: { x: number; y: number } | null = null
+// 失焦收起的挂起计时器：见 win.on('blur')，showNote() 可撤销
+let blurCollapseTimer: ReturnType<typeof setTimeout> | null = null
 // 便签的权威尺寸。绝不从 win.getBounds() 推导：Windows 会给透明窗口的 HWND
 // 自动外扩（本机上外扩到 ~1300×1400，且每移动一次 ±1px 跳动），
 // 读矩形会把假尺寸当真，位置越界检查就会把便签钳到屏幕顶（M14 修复的 bug）。
@@ -185,6 +187,22 @@ function createWindow(): void {
   })
   win.on('moved', savePosition)
 
+  // 失焦自动收起（blur-collapse spec）：贴纸展开时点击窗口外（桌面/其他应用）
+  // → 250ms 后通知渲染层收成球。挂起而非即发：托盘点击/第二实例抬前都发生在
+  // blur 之后（Windows 托盘 click 松开才发，距 blur 常有上百 ms），留撤销窗口，
+  // 否则「点托盘聚焦贴纸」会被误判成「点外部」先把贴纸收掉。计时器到期时二次
+  // 核对焦点，250ms 内点回来的同样不收。devtools 抢走焦点不收（调试常态）。
+  win.on('blur', () => {
+    if (noteForm !== 'note') return
+    if (win?.webContents.isDevToolsOpened()) return
+    cancelBlurCollapse()
+    blurCollapseTimer = setTimeout(() => {
+      blurCollapseTimer = null
+      if (!win || noteForm !== 'note' || win.isFocused()) return
+      win.webContents.send('qink:blur-collapse')
+    }, 250)
+  })
+
   if (process.env.ELECTRON_RENDERER_URL) {
     void win.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
@@ -249,6 +267,8 @@ function createTray(): void {
   tray.setToolTip('Qink')
   tray.setContextMenu(buildTrayMenu())
   tray.on('click', () => showNote())
+  // 右键托盘弹菜单同样先让窗口失焦：不撤销的话托盘菜单弹出的同时贴纸被收走
+  tray.on('right-click', () => cancelBlurCollapse())
 }
 
 /** 托盘菜单按当前置顶状态构建，切换后整体重建刷新勾选态 */
@@ -296,7 +316,16 @@ function applyAlwaysOnTop(): void {
   if (on) win.moveTop()
 }
 
+/** 撤销挂起的失焦收起：托盘/第二实例抬前、右键托盘时调用（点托盘必先让窗口 blur） */
+function cancelBlurCollapse(): void {
+  if (blurCollapseTimer) {
+    clearTimeout(blurCollapseTimer)
+    blurCollapseTimer = null
+  }
+}
+
 function showNote(): void {
+  cancelBlurCollapse()
   if (!win) return
   win.show()
   win.focus()
