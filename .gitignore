@@ -9,3 +9,6 @@ dist/
 .scratch/*/electron-profile/
 .scratch/*/user-data-*.json
 .scratch/*/failure.txt
+
+# ZCode 视频插件在本仓库的工作标记目录（非项目内容）
+.video_agent/
