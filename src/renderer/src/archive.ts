@@ -50,7 +50,9 @@ export function createArchiveView(opts: ArchiveOptions): ArchiveHandle {
 
   const onDocClick = (e: Event): void => {
     if (!open_ || animating) return
-    if ((e.target as HTMLElement).closest('.archive')) return
+    // 翻日会同步重建清单，把刚点击的按钮移出 DOM；此时 target.closest() 会误判为外部点击。
+    // composedPath() 保留事件开始时的祖先链，能识别这次点击原本来自清单内部。
+    if (container && e.composedPath().includes(container)) return
     close()
   }
   const onKey = (e: KeyboardEvent): void => {
