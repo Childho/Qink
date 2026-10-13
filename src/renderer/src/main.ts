@@ -3,7 +3,8 @@ import {
   ADAPTIVE_MIN_HEIGHT,
   BALL_INSET_X,
   BALL_SIZE,
-  clampNoteWidth,
+  dragDeltaRange,
+  fitNoteWidth,
   NOTE_INSET_BOTTOM,
   NOTE_INSET_X,
   NOTE_INSET_Y,
@@ -91,6 +92,7 @@ for (const type of ['pointerdown', 'keydown', 'wheel'] as const) {
  * 尺寸持久化在 settings.noteW/noteH，主进程启动即用它们建窗，避免跳变。 */
 
 let curW = NOTE_WIDTH
+let workAreaWidth = Infinity
 let manualH: number | null = null
 let winX = 0
 let winY = 0
@@ -150,6 +152,19 @@ window.qink.onNoteCapped((h) => {
   }
 })
 
+window.qink.onEffectiveNoteWidth((width, areaWidth) => {
+  if (!menuEl.hidden) closeMenu()
+  workAreaWidth = areaWidth
+  if (form !== 'note') return
+  if (curW !== width) {
+    curW = width
+    if (!morphLock) applySize()
+  }
+  lastSentSize = ''
+  scheduleReport()
+})
+window.qink.onMenuDismiss(closeMenu)
+
 // 托盘切换置顶后的反向同步：渲染层是状态源，本地 data 不更新的话，
 // 下一次 persist() 全量推送会把主进程里的置顶状态整体替换回旧值
 window.qink.onAlwaysOnTop((on) => {
@@ -181,9 +196,11 @@ function applyForm(): void {
     dock.classList.toggle('flip', winX < 0)
     window.qink.setForm('ball').catch(() => {}) // 即发即忘；测试假环境可能无此通道
   } else {
-    window.qink.setForm('note').catch(() => {})
+    window.qink.setForm('note').then((size) => {
+      if (size?.w) { curW = size.w; applySize() }
+      scheduleReport()
+    }).catch(() => {})
     renderTasks() // 球形态期间速记新增的任务在此补渲染
-    scheduleReport() // 窗口切回贴纸尺寸后，让自适应高度立刻校正一次
   }
 }
 
@@ -213,7 +230,8 @@ async function expandMorph(): Promise<void> {
   morphLock = true
   document.body.classList.add('form-morphing')
   // 切窗落定前 data-form 仍是 ball，屏幕上无任何可见变化；落定后贴纸起始帧恰好盖住球
-  await window.qink.setForm('note')
+  const size = await window.qink.setForm('note')
+  if (size?.w) curW = size.w
   document.body.dataset.form = 'note'
   renderTasks() // 球形态期间速记新增的任务在此补渲染
   // 探针阶段关过渡量自然尺寸：起始帧若在一次「带过渡的重算」里生效，会自己触发
@@ -989,7 +1007,10 @@ function wakeThumb(originY?: number): void {
 
 /* ---------- 右键抽屉与全局 ---------- */
 
+let menuRequest = 0
+
 function openMenu(items: MenuItem[], x: number, y: number): void {
+  closeMenu()
   menuEl.innerHTML = ''
   for (const it of items) {
     const div = document.createElement(it.sep ? 'div' : 'button')
@@ -1008,16 +1029,32 @@ function openMenu(items: MenuItem[], x: number, y: number): void {
     })
     menuEl.appendChild(div)
   }
+  menuEl.style.maxHeight = ''
+  menuEl.style.maxWidth = ''
+  menuEl.style.overflowY = ''
+  menuEl.style.visibility = 'hidden'
   menuEl.hidden = false
-  const clampX = Math.min(x, window.innerWidth - menuEl.offsetWidth - 4)
-  const clampY = Math.min(y, window.innerHeight - menuEl.offsetHeight - 4)
-  menuEl.style.left = Math.max(0, clampX) + 'px'
-  menuEl.style.top = Math.max(0, clampY) + 'px'
-  menuEl.querySelector<HTMLElement>('.menu-item')?.focus()
+  const request = ++menuRequest
+  void window.qink.placeMenu(x, y, menuEl.offsetWidth, menuEl.offsetHeight).then((placement) => {
+    if (request !== menuRequest) return
+    if (!placement) { closeMenu(); return }
+    menuEl.style.maxHeight = `${placement.maxHeight}px`
+    menuEl.style.maxWidth = `${placement.maxWidth}px`
+    menuEl.style.overflowY = 'auto'
+    menuEl.style.left = `${placement.left}px`
+    menuEl.style.top = `${placement.top}px`
+    dock.style.top = form === 'ball' ? `${NOTE_INSET_Y + placement.dockShiftY}px` : ''
+    menuEl.style.visibility = ''
+    menuEl.querySelector<HTMLElement>('.menu-item')?.focus()
+  }).catch(() => closeMenu())
 }
 
 function closeMenu(): void {
+  menuRequest++
   menuEl.hidden = true
+  menuEl.style.visibility = ''
+  dock.style.top = ''
+  window.qink.closeMenu()
 }
 
 function blankMenu(x: number, y: number): void {
@@ -1080,6 +1117,7 @@ function openArchive(): void {
 }
 
 function wire(): void {
+  window.addEventListener('blur', closeMenu)
   document.addEventListener('click', (e) => {
     if (!suppressClick) return
     suppressClick = false
@@ -1107,6 +1145,11 @@ function wire(): void {
   let ignored = false
   document.addEventListener('pointermove', (e) => {
     if (e.buttons) return
+    // 菜单可能在临时扩出的透明区域；此时不能让鼠标穿透，否则菜单无法点击。
+    if (!menuEl.hidden) {
+      if (ignored) { ignored = false; window.qink.ignoreMouse(false) }
+      return
+    }
     const target = e.target as Element
     const next = !target.closest('#note, #dock, #menu')
     if (next !== ignored) { ignored = next; window.qink.ignoreMouse(next) }
@@ -1260,8 +1303,6 @@ async function fling(vx0: number, vy0: number, lastDx: number, lastDy: number): 
   const insetX = isBall ? BALL_INSET_X : NOTE_INSET_X
   const contentW = isBall ? BALL_SIZE : curW
   const contentH = isBall ? BALL_SIZE : Math.round(manualH ?? note.offsetHeight)
-  const winW = contentW + insetX * 2
-  const winH = contentH + NOTE_INSET_Y + NOTE_INSET_BOTTOM
   const seq = ++glideSeq
   const area = await window.qink.workArea()
   if (seq !== glideSeq) {
@@ -1270,11 +1311,9 @@ async function fling(vx0: number, vy0: number, lastDx: number, lastDy: number): 
   }
   const anchorX = winX - lastDx
   const anchorY = winY - lastDy
-  // 边界换算成 dragMove 位移域：窗口可落在 [工作区 - 透明边距, 工作区 - 窗宽 - 透明边距]
-  const minGx = area.x - insetX - anchorX
-  const maxGx = area.x + area.width - winW - insetX - anchorX
-  const minGy = area.y - NOTE_INSET_Y - anchorY
-  const maxGy = area.y + area.height - winH - NOTE_INSET_Y - anchorY
+  const { minX: minGx, maxX: maxGx, minY: minGy, maxY: maxGy } = dragDeltaRange(
+    { x: anchorX, y: anchorY }, { width: contentW, height: contentH }, insetX, area
+  )
   const g: Glide = { vx, vy, gx: lastDx, gy: lastDy, raf: 0, last: performance.now(), bounces: 0 }
   glide = g
   const step = (t: number): void => {
@@ -1414,7 +1453,7 @@ function wireResize(): void {
     let x: number | undefined
     if (edge.includes('left')) w = startW - dx
     else if (edge.includes('right')) w = startW + dx
-    w = clampNoteWidth(w)
+    w = fitNoteWidth(w, workAreaWidth)
     if (edge.includes('left')) x = startWinX + (startW - w)
     if (manualH != null) {
       if (edge.includes('bottom')) manualH = Math.max(NOTE_MIN_HEIGHT, Math.round(startH + dy))
@@ -1452,7 +1491,7 @@ function wireResize(): void {
     })
     el.addEventListener('dblclick', (e) => {
       e.stopPropagation()
-      curW = NOTE_WIDTH
+      curW = fitNoteWidth(NOTE_WIDTH, workAreaWidth)
       manualH = null
       note.style.width = ''
       note.style.height = ''
@@ -1656,7 +1695,8 @@ function wireBall(): void {
 
 async function boot(): Promise<void> {
   data = await window.qink.getData()
-  curW = clampNoteWidth(typeof data.settings.noteW === 'number' ? data.settings.noteW : NOTE_WIDTH)
+  workAreaWidth = (await window.qink.workArea()).width
+  curW = fitNoteWidth(typeof data.settings.noteW === 'number' ? data.settings.noteW : NOTE_WIDTH, workAreaWidth)
   manualH = typeof data.settings.noteH === 'number'
     ? Math.max(NOTE_MIN_HEIGHT, Math.round(data.settings.noteH))
     : null

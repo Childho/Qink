@@ -6,6 +6,8 @@ import {
   clampNoteHeight,
   clampNotePosition,
   clampNoteWidth,
+  dragDeltaRange,
+  fitNoteWidth,
   insetXForForm,
   maxNoteHeightFor,
   NOTE_INSET_BOTTOM,
@@ -15,6 +17,8 @@ import {
   NOTE_MIN_HEIGHT,
   NOTE_MIN_WIDTH,
   NOTE_WIDTH,
+  noteSizeForForm,
+  placeContextMenu,
   QUICK_PILL_GAP,
   QUICK_PILL_OUTER_WIDTH,
   windowHeightFor,
@@ -75,5 +79,55 @@ describe('悬浮球窗口与速记胶囊空间', () => {
   it('贴纸形态沿用阴影边距，与球形态互不影响', () => {
     expect(windowWidthForForm('note', 320)).toBe(windowWidthFor(320))
     expect(insetXForForm('note')).toBe(NOTE_INSET_X)
+  })
+})
+
+describe('右键菜单的屏幕与窗口边界', () => {
+  const area = { x: 0, y: 0, width: 960, height: 800 }
+  const menu = { width: 142, height: 224 }
+
+  it('悬浮球靠近屏幕顶部时向下扩窗，球仍留在原位', () => {
+    const bounds = { x: 180, y: -40, width: 600, height: 184 }
+    const placed = placeContextMenu(bounds, area, { x: 300, y: 68 }, menu)
+    expect(placed.y).toBe(-40)
+    expect(placed.dockShiftY).toBe(0)
+    expect(placed.top + menu.height).toBeLessThanOrEqual(placed.height)
+    expect(placed.y + placed.top + menu.height).toBeLessThanOrEqual(area.height)
+  })
+
+  it('悬浮球靠近屏幕底部时向上扩窗，菜单和球都不跳位', () => {
+    const bounds = { x: 180, y: 704, width: 600, height: 184 }
+    const placed = placeContextMenu(bounds, area, { x: 300, y: 68 }, menu)
+    expect(placed.y).toBeLessThan(bounds.y)
+    expect(placed.y + placed.dockShiftY + NOTE_INSET_Y).toBe(bounds.y + NOTE_INSET_Y)
+    expect(placed.top).toBeGreaterThanOrEqual(0)
+    expect(placed.y + placed.top + menu.height).toBeLessThanOrEqual(area.height)
+  })
+
+  it('贴纸右键菜单贴近屏幕边缘时仍落在桌面内', () => {
+    const bounds = { x: -56, y: -40, width: 432, height: 408 }
+    const placed = placeContextMenu(bounds, area, { x: 70, y: 50 }, menu)
+    expect(placed.left).toBeGreaterThanOrEqual(0)
+    expect(bounds.x + placed.left).toBeGreaterThanOrEqual(area.x)
+    expect(placed.dockShiftY).toBe(0)
+  })
+})
+
+describe('惯性投掷边界', () => {
+  it('球能抵达工作区右边与底边，透明边距不重复扣除', () => {
+    const area = { x: 0, y: 0, width: 960, height: 800 }
+    const anchor = { x: 100, y: 100 }
+    const range = dragDeltaRange(anchor, { width: BALL_SIZE, height: BALL_SIZE }, BALL_INSET_X, area)
+    expect(anchor.x + range.maxX + BALL_INSET_X + BALL_SIZE).toBe(area.width)
+    expect(anchor.y + range.maxY + NOTE_INSET_Y + BALL_SIZE).toBe(area.height)
+  })
+})
+
+describe('屏幕变窄时的贴纸宽度', () => {
+  it('只收窄当前显示宽度，回到宽屏后恢复原偏好', () => {
+    expect(fitNoteWidth(720, 640)).toBe(640)
+    expect(fitNoteWidth(720, 1920)).toBe(720)
+    expect(noteSizeForForm('note', 720, null, 800, 640).w).toBe(640)
+    expect(noteSizeForForm('ball', 720, null, 800, 640).w).toBe(BALL_SIZE)
   })
 })

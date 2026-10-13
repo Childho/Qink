@@ -4,11 +4,12 @@ import {
   ADAPTIVE_MIN_HEIGHT,
   clampNoteHeight,
   clampNotePosition,
-  clampNoteWidth,
+  fitNoteWidth,
   insetXForForm,
   NOTE_INSET_Y,
   NOTE_WIDTH,
   noteSizeForForm,
+  placeContextMenu,
   windowWidthFor,
   windowWidthForForm,
   windowHeightFor
@@ -25,6 +26,7 @@ let win: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
 let dragAnchor: { x: number; y: number } | null = null
+let menuBaseBounds: Electron.Rectangle | null = null
 // 失焦收起的挂起计时器：见 win.on('blur')，showNote() 可撤销
 let blurCollapseTimer: ReturnType<typeof setTimeout> | null = null
 // 便签的权威尺寸。绝不从 win.getBounds() 推导：Windows 会给透明窗口的 HWND
@@ -113,7 +115,8 @@ function createWindow(): void {
   // 渲染层量出内容后经 qink:note-resize 校正）
   const s = getData().settings
   // 双形态启动：球形态固定 56×56，贴纸形态走持久化/默认尺寸（启动即定，避免跳变）
-  const boot = noteSizeForForm(s.noteMode === 'ball' ? 'ball' : 'note', s.noteW, s.noteH, screen.getPrimaryDisplay().workArea.height)
+  const bootArea = screen.getPrimaryDisplay().workArea
+  const boot = noteSizeForForm(s.noteMode === 'ball' ? 'ball' : 'note', s.noteW, s.noteH, bootArea.height, bootArea.width)
   noteSize = boot
   noteForm = s.noteMode === 'ball' ? 'ball' : 'note'
   win = new BrowserWindow({
@@ -211,7 +214,7 @@ function createWindow(): void {
 }
 
 function savePosition(): void {
-  if (!win) return
+  if (!win || menuBaseBounds) return // 菜单扩窗只是临时绘图区，不写成便签位置
   const [x, y] = win.getPosition()
   const d = getData()
   d.settings.noteX = x + insetXForForm(noteForm)
@@ -236,6 +239,14 @@ function currentNoteSize(): { w: number; h: number } {
   return { ...noteSize }
 }
 
+function restoreMenuBounds(): void {
+  if (!win || !menuBaseBounds) return
+  const bounds = menuBaseBounds
+  win.setBounds(bounds)
+  menuBaseBounds = null
+  forwardPos(true)
+}
+
 /** 只在主显示器工作区内恢复，防止窗口丢在已拔掉的屏幕外 */
 function restorePosition(): void {
   const { noteX, noteY } = getData().settings
@@ -248,7 +259,18 @@ function restorePosition(): void {
 /** 显示器被拔/分辨率变化后：把窗口拉回主显示器工作区（存储位置就是最新位置，等价于钳制当前位） */
 function reclampToWorkArea(): void {
   if (!win) return
+  if (menuBaseBounds) win.webContents.send('qink:menu-dismiss')
+  restoreMenuBounds()
   const [x, y] = win.getPosition()
+  const area = screen.getPrimaryDisplay().workArea
+  if (noteForm === 'note') {
+    const preferred = getData().settings.noteW ?? NOTE_WIDTH
+    const w = fitNoteWidth(preferred, area.width)
+    const h = clampNoteHeight(noteSize.h, area.height)
+    noteSize = { w, h }
+    win.setSize(windowWidthFor(w), windowHeightFor(h))
+    win.webContents.send('qink:effective-width', w, area.width)
+  }
   restorePosition()
   const [nx, ny] = win.getPosition()
   if (nx !== x || ny !== y) diag('reclamp', { from: [x, y], to: [nx, ny] })
@@ -257,7 +279,13 @@ function reclampToWorkArea(): void {
 /** 睡眠唤醒/解锁后轻推窗口：宽度 +1 再复原，强迫系统重新合成透明表面（透明窗掉渲染的标准自救） */
 function nudgeRepaint(): void {
   if (!win) return
-  const b = win.getBounds()
+  if (menuBaseBounds) win.webContents.send('qink:menu-dismiss')
+  restoreMenuBounds()
+  const [x, y] = win.getPosition()
+  const b = {
+    x, y,
+    width: windowWidthForForm(noteForm, noteSize.w), height: windowHeightFor(noteSize.h)
+  }
   win.setBounds({ ...b, width: b.width + 1 })
   win.setBounds(b)
 }
@@ -338,6 +366,25 @@ function wireIpc(): void {
     savePosition()
   })
 
+  ipcMain.handle('qink:menu-place', (_e, x: number, y: number, width: number, height: number) => {
+    if (!win || ![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return null
+    restoreMenuBounds()
+    // Windows 透明窗的 getBounds 读数会虚胖；尺寸用主进程账本，位置只读 getPosition。
+    const [winX, winY] = win.getPosition()
+    const bounds = {
+      x: winX, y: winY,
+      width: windowWidthForForm(noteForm, noteSize.w), height: windowHeightFor(noteSize.h)
+    }
+    const area = screen.getDisplayNearestPoint({ x: bounds.x + x, y: bounds.y + y }).workArea
+    const placement = placeContextMenu(bounds, area, { x, y }, { width, height })
+    menuBaseBounds = bounds
+    if (placement.y !== bounds.y || placement.height !== bounds.height) {
+      win.setBounds({ ...bounds, y: placement.y, height: placement.height })
+    }
+    return placement
+  })
+  ipcMain.on('qink:menu-close', restoreMenuBounds)
+
   // 渲染层诊断事件透传（boot 完成/形态切换及原因）：现场「消失」报告能对上时间线
   ipcMain.on('qink:diag', (_e, event: unknown, detail?: unknown) => {
     diag(String(event), detail)
@@ -351,7 +398,7 @@ function wireIpc(): void {
     if (typeof noteW !== 'number' || !Number.isFinite(noteW)) return
     if (typeof noteH !== 'number' || !Number.isFinite(noteH)) return
     const workArea = screen.getPrimaryDisplay().workArea
-    const w = clampNoteWidth(noteW)
+    const w = fitNoteWidth(noteW, workArea.width)
     const h = clampNoteHeight(noteH, workArea.height)
     noteSize = { w, h }
     const [curX, y] = win.getPosition()
@@ -364,6 +411,7 @@ function wireIpc(): void {
       width: windowWidthFor(w),
       height: windowHeightFor(h)
     })
+    if (w !== Math.round(noteW)) win.webContents.send('qink:effective-width', w, workArea.width)
     if (h < Math.round(noteH)) win.webContents.send('qink:note-capped', h)
   })
 
@@ -423,6 +471,7 @@ function wireIpc(): void {
   ipcMain.handle('qink:form-change', (_e, mode: string) => {
     if (mode !== 'ball' && mode !== 'note') return
     if (!win) return
+    restoreMenuBounds()
     const d = getData()
     if (d.settings.noteMode !== mode) {
       d.settings.noteMode = mode
@@ -430,7 +479,7 @@ function wireIpc(): void {
     }
     const workArea = screen.getPrimaryDisplay().workArea
     const s = d.settings
-    const size = noteSizeForForm(mode, s.noteW, s.noteH, workArea.height)
+    const size = noteSizeForForm(mode, s.noteW, s.noteH, workArea.height, workArea.width)
     noteSize = size
     noteForm = mode
     const [curX, curY] = win.getPosition()
@@ -441,5 +490,6 @@ function wireIpc(): void {
       width: windowWidthForForm(mode, size.w),
       height: windowHeightFor(size.h)
     })
+    return size
   })
 }

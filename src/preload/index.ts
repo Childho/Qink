@@ -8,6 +8,11 @@ contextBridge.exposeInMainWorld('qink', {
   setData: (data: QinkData): Promise<void> => ipcRenderer.invoke('qink:data:set', data),
   setAutostart: (enabled: boolean): Promise<void> => ipcRenderer.invoke('qink:autostart', enabled),
   openDataFolder: (): Promise<void> => ipcRenderer.invoke('qink:open-data-folder'),
+  placeMenu: (x: number, y: number, width: number, height: number): Promise<{
+    left: number; top: number; dockShiftY: number; maxHeight: number; maxWidth: number
+  } | null> => ipcRenderer.invoke('qink:menu-place', x, y, width, height),
+  closeMenu: (): void => ipcRenderer.send('qink:menu-close'),
+  onMenuDismiss: (cb: () => void): void => { ipcRenderer.on('qink:menu-dismiss', cb) },
   workArea: (): Promise<{ x: number; y: number; width: number; height: number }> =>
     ipcRenderer.invoke('qink:work-area'),
   quit: (): void => ipcRenderer.send('qink:quit'),
@@ -21,7 +26,10 @@ contextBridge.exposeInMainWorld('qink', {
     ipcRenderer.send('qink:note-resize', width, height, winX),
   /** 双形态切换：球形态固定 56×56，贴纸形态回持久化尺寸（窗口 x 不动）。
    *  invoke 返回 Promise：形变编排要先等窗口切完再揭幕，杜绝换窗瞬间的可见错位 */
-  setForm: (mode: 'ball' | 'note'): Promise<void> => ipcRenderer.invoke('qink:form-change', mode),
+  setForm: (mode: 'ball' | 'note'): Promise<{ w: number; h: number }> => ipcRenderer.invoke('qink:form-change', mode),
+  onEffectiveNoteWidth: (cb: (width: number, workAreaWidth: number) => void): void => {
+    ipcRenderer.on('qink:effective-width', (_e, width, workAreaWidth) => cb(width, workAreaWidth))
+  },
   onNoteCapped: (cb: (height: number) => void): void => {
     ipcRenderer.on('qink:note-capped', (_e, h) => cb(h))
   },

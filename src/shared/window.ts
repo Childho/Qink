@@ -31,11 +31,12 @@ export function noteSizeForForm(
   form: 'ball' | 'note',
   noteW: number | null,
   noteH: number | null,
-  workAreaHeight: number
+  workAreaHeight: number,
+  workAreaWidth: number = Infinity
 ): { w: number; h: number } {
   if (form === 'ball') return { w: BALL_SIZE, h: BALL_SIZE }
   return {
-    w: clampNoteWidth(typeof noteW === 'number' ? noteW : NOTE_WIDTH),
+    w: fitNoteWidth(typeof noteW === 'number' ? noteW : NOTE_WIDTH, workAreaWidth),
     h: clampNoteHeight(typeof noteH === 'number' ? noteH : ADAPTIVE_MIN_HEIGHT, workAreaHeight)
   }
 }
@@ -53,6 +54,11 @@ export function windowHeightFor(noteHeight: number): number {
 /** 便签宽度夹在手动边界内 */
 export function clampNoteWidth(noteWidth: number): number {
   return Math.round(Math.max(NOTE_MIN_WIDTH, Math.min(noteWidth, NOTE_MAX_WIDTH)))
+}
+
+/** 用户偏好宽度不变，实际显示宽度只按当前工作区临时收窄。 */
+export function fitNoteWidth(preferredWidth: number, workAreaWidth: number): number {
+  return Math.min(clampNoteWidth(preferredWidth), Math.max(1, Math.floor(workAreaWidth)))
 }
 
 /** 当前工作区内容得下的最大便签高（窗口完整落在工作区内） */
@@ -75,5 +81,49 @@ export function clampNotePosition(x: number, y: number, noteWidth: number, noteH
   return {
     x: Math.round(Math.max(area.x, Math.min(x, area.x + Math.max(0, area.width - noteWidth)))),
     y: Math.round(Math.max(area.y, Math.min(y, area.y + Math.max(0, area.height - noteHeight))))
+  }
+}
+
+/** 自绘菜单必须同时落在桌面工作区和 Electron 窗口内；窗口不够高时临时向上/下扩展。 */
+export function placeContextMenu(
+  bounds: { x: number; y: number; width: number; height: number },
+  area: { x: number; y: number; width: number; height: number },
+  point: { x: number; y: number },
+  menu: { width: number; height: number }
+): { y: number; height: number; left: number; top: number; dockShiftY: number; maxHeight: number; maxWidth: number } {
+  const gap = 4
+  const maxHeight = Math.max(1, area.height - gap * 2)
+  const maxWidth = Math.max(1, area.width - gap * 2)
+  const menuHeight = Math.min(menu.height, maxHeight)
+  const menuWidth = Math.min(menu.width, maxWidth)
+  const screenX = Math.max(area.x + gap, Math.min(bounds.x + point.x, area.x + area.width - menuWidth - gap))
+  const screenY = Math.max(area.y + gap, Math.min(bounds.y + point.y, area.y + area.height - menuHeight - gap))
+  const y = Math.min(bounds.y, screenY - gap)
+  const bottom = Math.max(bounds.y + bounds.height, screenY + menuHeight + gap)
+  return {
+    y,
+    height: bottom - y,
+    left: screenX - bounds.x,
+    top: screenY - y,
+    dockShiftY: bounds.y - y,
+    maxHeight,
+    maxWidth
+  }
+}
+
+/** 把内容在工作区里的可移动范围换算成窗口拖动位移，透明边距只扣一次。 */
+export function dragDeltaRange(
+  anchor: { x: number; y: number },
+  content: { width: number; height: number },
+  insetX: number,
+  area: { x: number; y: number; width: number; height: number }
+): { minX: number; maxX: number; minY: number; maxY: number } {
+  const minX = area.x - insetX - anchor.x
+  const minY = area.y - NOTE_INSET_Y - anchor.y
+  return {
+    minX,
+    maxX: minX + Math.max(0, area.width - content.width),
+    minY,
+    maxY: minY + Math.max(0, area.height - content.height)
   }
 }
