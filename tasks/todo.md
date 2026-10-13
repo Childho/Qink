@@ -464,8 +464,39 @@ vitest 35/35 ✅（新增 mist 5 项）；typecheck ✅。dev 实机（Win10 256
 - [x] `--violet`/`--danger` 不动（红>紫>橙语义层级保辨识度）
 - [x] 验收：typecheck 零错误 · vitest 62/62（四轮）· 产物 CSS 断言（新值 7 命中/旧值 0）· mac dev 截图（`.scratch/warm-restyle/evidence/note-form.png`：奶油底/衬线目标/砖橙滚入/置顶紫全对）· 状态矩阵不回归
 - [x] code-review 两轴评审 + 修复（commit d0a3ddf）：阴影注释如实化（线影墨 --fg-strong 同源、与正文墨分档）+ ADR-0008 修订注；`.quick` 微卡其底落地点缀④；shatter 墨色注释。评审怀疑的 quarter font-family 死声明核实为 ghost 排除的承重墙，保留
-- [ ] Windows 装机（0.3.0 安装包已产出：mac 交叉打包，2026-10-11）；SimSun 小字观感与真实壁纸效果装机后定（回退路线：仅 .gtext 衬线）
+- [x] Windows 装机：0.3.1 已在本机安装并启动（2026-10-13）；SimSun 小字观感与真实壁纸效果仍待用户主观验收（回退路线：仅 .gtext 衬线）
 
 ### Review（2026-10-11）
 
 分支 feat/warm-restyle 5 提交（96706fc 立项 / 427684a 色值层 / b3f8826 排印层 / 862d1bf ticket 关闭 / d0a3ddf 评审修复），未合入 main。运行态实测顺带验证 blur-collapse 全链路（blur 收球→双击展开→× 收起，diag 三事件）。种子验证插曲：一条非法形态的 dueAt（明天+时刻）被 dueStatus 防御分支正确判 future，非缺陷。现场管理：data.json 备份→逐字节还原（sha 一致）、临时文件清场、无孤儿进程。待用户：真机看衬线观感与 hover 手感；合并与装机节奏待定。
+
+## Bug 修复：已完成清单翻到前一天会退出（2026-10-13）
+
+- [x] 建立真实 Electron 渲染页复现：打开已完成清单→用鼠标点击“前一天”，断言日期切换且清单仍打开
+- [x] 修复导航点击导致的清单意外退出：点击按钮触发整行重绘后用原始事件路径判断是否点击在清单内，避免 `target.closest()` 查询已更新 DOM
+- [x] 验证：`.scratch/archive-navigation/verify.cjs` 先红后绿；`npm test` 62/62；`npm run typecheck` 通过
+
+### Review
+
+根因是翻日时按钮同步从 DOM 移除，真实鼠标点击仍继续冒泡；关闭判断沿着已变更的 DOM 查找祖先，把清单内点击当成外部点击。现在改用点击事件原始传播路径判定。红灯时记录到按钮最初属于 `.archive`，冒泡时已脱离 DOM，但事件路径仍包含 `.archive`；修复后同一真实鼠标复现保留清单并展示前一天记录。
+
+## Bug 修复：右键菜单靠屏幕边缘被截断（2026-10-13）
+
+- [x] 隔离 Electron 复现：菜单 224px > 悬浮球窗口 184px，底部 40px 被裁切；检查贴纸/任务菜单及其他浮层
+- [x] 菜单按桌面工作区定位，临时扩展透明窗口；球原位不动，关闭后恢复；保留暖纸样式和原操作
+- [x] 修复同类边界问题：惯性投掷重复扣边距、窄屏贴纸宽度越界、透明窗口虚胖尺寸误读
+- [x] 运行针对性复现、完整测试、类型检查和构建检查
+
+### Review
+
+隔离 Electron 复现从失败（menuBottom=224 > viewportHeight=184）转为通过（menuBottom=228 ≤ viewportHeight=232）；截图 `.scratch/menu-clipping/menu-visible.png` 可见最后一项「退出 Qink」。脚本同时验证球的屏幕位置不变、字号菜单项可执行、关闭后窗口恢复 184px。`npm test` 67/67、`npm run typecheck`、`npm run build`、`git diff --check` 均通过。贴纸/任务菜单共用同一定位入口；托盘菜单由系统定位，速记胶囊已有两侧预留。未做装机版真机手点验收。
+
+## 发布并安装 0.3.1（2026-10-13）
+
+- [x] 将版本号从 0.3.0 升到 0.3.1
+- [x] 完整测试、类型检查并按双镜像配置打出 Windows 安装包
+- [x] 安装到本机，启动后核对安装版本；复制安装包到 `E:\下载`
+
+### Review
+
+`npm test` 67/67、`npm run typecheck` 通过；双镜像配置下 `npm run package` 成功生成 Windows x64 安装包。`E:\下载\Qink-Setup-0.3.1.exe` SHA256 为 `6B236986195FB53D79D378FBBED47AAB6B526F287FB9272DA2C9A6F4C0750393`，与 `dist\Qink-Setup-0.3.1.exe` 一致。静默安装退出码 0；`%LOCALAPPDATA%\Programs\Qink\Qink.exe` 版本为 `0.3.1.0`，安装后启动成功。
