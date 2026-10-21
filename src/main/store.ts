@@ -37,3 +37,8 @@ export function queueSave(): void {
 export function flushPendingSync(): void {
   store.flushPendingSync()
 }
+
+/** 外部写入热重载（ADR-0010）：主文件被外部工具原子修改且校验通过时，回调最新全量数据 */
+export function watchExternalData(onExternal: (data: QinkData) => void): void {
+  store.watchExternal(onExternal)
+}

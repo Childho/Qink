@@ -189,3 +189,74 @@ describe('退出冲刷', () => {
     expect(await exists(dataFile)).toBe(false)
   })
 })
+
+describe('外部写入热重载（ADR-0010）', () => {
+  afterEach(() => {
+    store.stopExternalWatch()
+  })
+
+  it('外部改主文件 → 校验通过后灌入内存并回调全量数据', async () => {
+    await store.load()
+    let reloaded: unknown = null
+    store.watchExternal((d) => { reloaded = d })
+    const external = defaultData()
+    external.tasks.push({ id: 'x1', text: '外部写入', createdAt: '2026-10-21T01:00:00.000Z' })
+    await writeFile(dataFile, JSON.stringify(external, null, 2), 'utf-8') // watchExternal 已建好目录
+    await until(async () => reloaded !== null)
+    expect(store.get().tasks.map((t) => t.id)).toEqual(['x1'])
+    expect((reloaded as { tasks: unknown[] }).tasks).toHaveLength(1)
+  })
+
+  it('自身落盘触发监听 → 内容与内存一致，不回调（回环抑制）', async () => {
+    await store.load()
+    let calls = 0
+    store.watchExternal(() => { calls++ })
+    const mine = defaultData()
+    mine.settings.noteX = 88
+    store.set(mine)
+    await until(async () => await exists(dataFile))
+    await new Promise((r) => setTimeout(r, 600))
+    expect(calls).toBe(0)
+    expect(JSON.parse(await readFile(dataFile, 'utf-8')).settings.noteX).toBe(88)
+  })
+
+  it('坏 JSON 的外部写入 → 忽略且不隔离（现场原地保留），不回调', async () => {
+    await store.load()
+    let calls = 0
+    store.watchExternal(() => { calls++ })
+    const garbage = '外部写到一半'
+    await writeFile(dataFile, garbage, 'utf-8')
+    await new Promise((r) => setTimeout(r, 600))
+    expect(calls).toBe(0)
+    expect(await readFile(dataFile, 'utf-8')).toBe(garbage) // 不隔离、不覆盖，留给启动恢复链
+    expect(store.get()).toEqual(defaultData())
+  })
+
+  it('自身防抖挂起时的外部写入 → 本轮放弃（用户未落盘编辑优先），最终落盘为内存态', async () => {
+    await store.load()
+    let calls = 0
+    store.watchExternal(() => { calls++ })
+    const mine = defaultData()
+    mine.settings.noteY = 66
+    store.set(mine) // 300ms 防抖挂起中
+    const external = defaultData()
+    external.settings.noteY = 999
+    await writeFile(dataFile, JSON.stringify(external, null, 2), 'utf-8') // 外部抢跑落盘
+    await until(async () => (await exists(dataFile)) && JSON.parse(await readFile(dataFile, 'utf-8')).settings.noteY === 66)
+    await new Promise((r) => setTimeout(r, 600))
+    expect(calls).toBe(0) // 外部内容被用户编辑顶掉，从未灌入内存
+    expect(store.get().settings.noteY).toBe(66)
+  })
+
+  it('备份文件变化不触发（只盯主文件）', async () => {
+    await store.load()
+    let calls = 0
+    store.watchExternal(() => { calls++ })
+    await mkdir(dirname(backupFile), { recursive: true })
+    const other = defaultData()
+    other.settings.noteX = 777
+    await writeFile(backupFile, JSON.stringify(other, null, 2), 'utf-8')
+    await new Promise((r) => setTimeout(r, 600))
+    expect(calls).toBe(0)
+  })
+})

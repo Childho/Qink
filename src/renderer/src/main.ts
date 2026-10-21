@@ -1223,6 +1223,16 @@ function wire(): void {
     }
   }, tickMs)
 
+  // 外部写入热重载（ADR-0010）：AI/脚本原子改 data.json → 主进程校验后推全量数据。
+  // 只换数据源重渲染（render 的守卫会避开正在进行的输入/拖动/清单），绝不 persist——
+  // 回写会把外部数据原样再落盘一次，触发主进程监听形成「写→看→写」回环
+  window.qink.onExternalData((next) => {
+    data = next
+    lastDateKey = dateKey(new Date())
+    render()
+    updateBallCrack()
+  })
+
   // 窗口失焦即停滑行（隐藏窗口 rAF 暂停，锚点留在半途不如立刻落定）
   window.addEventListener('blur', cancelGlide)
 

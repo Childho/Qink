@@ -1,12 +1,14 @@
 import { mkdir, open, readFile, rename } from 'node:fs/promises'
-import { closeSync, fsyncSync, mkdirSync, openSync, renameSync, writeSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { closeSync, fsyncSync, mkdirSync, openSync, renameSync, watch, writeSync, type FSWatcher } from 'node:fs'
+import { basename, dirname } from 'node:path'
 import type { QinkData } from '../shared/dates'
 
 // 数据耐久核心（ADR-0009）：不依赖 electron，路径由调用方注入，可被 vitest 直接测。
 // 三件事：原子写（tmp + fsync + rename）、坏档留证（.corrupt 而非静默清零）、退出冲刷（同步落盘）。
 
 const DEBOUNCE_MS = 300
+/** 外部写入热重载的监听防抖：合并同一次外部原子写产生的 change/rename 连发事件 */
+const WATCH_DEBOUNCE_MS = 250
 
 export interface StorePaths {
   /** 主文件（文档目录） */
@@ -29,6 +31,10 @@ export interface Store {
   queueSave(): void
   /** 退出前同步冲刷挂起的防抖写：before-quit 里没有机会等异步回调跑完 */
   flushPendingSync(): void
+  /** 外部写入热重载（ADR-0010）：监听主文件被外部工具修改，校验通过后灌入内存并回调 */
+  watchExternal(onExternal: (data: QinkData) => void): void
+  /** 停止外部监听（测试清理用） */
+  stopExternalWatch(): void
 }
 
 export function defaultData(): QinkData {
@@ -109,6 +115,11 @@ function writeFileAtomicSync(file: string, json: string): void {
 export function createStore(paths: () => StorePaths): Store {
   let cache: QinkData = defaultData()
   let saveTimer: NodeJS.Timeout | null = null
+  // 外部监听状态（ADR-0010）
+  let watcher: FSWatcher | null = null
+  let watchTimer: NodeJS.Timeout | null = null
+  /** 自身落盘进行中：这期间到达的监听事件一律放弃，防止把写前旧内容灌回内存 */
+  let writing = false
 
   /** 防抖保存：高频操作（打字、拖动松手）合并成一次落盘。 */
   function queueSave(): void {
@@ -122,19 +133,70 @@ export function createStore(paths: () => StorePaths): Store {
   async function persist(): Promise<void> {
     const json = JSON.stringify(cache, null, 2)
     const { dataFile, backupFile } = paths()
+    writing = true
     try {
-      await mkdir(dirname(dataFile), { recursive: true })
-      await writeFileAtomic(dataFile, json)
+      try {
+        await mkdir(dirname(dataFile), { recursive: true })
+        await writeFileAtomic(dataFile, json)
+      } catch (err) {
+        // 主文件落盘失败不致命（内存态仍正确），下次任何 queueSave 会再试
+        console.error('[qink] 保存数据失败:', err)
+      }
+      try {
+        await mkdir(dirname(backupFile), { recursive: true })
+        await writeFileAtomic(backupFile, json)
+      } catch {
+        // 备份失败静默：备份只是保险，不是主路径
+      }
+    } finally {
+      writing = false
+    }
+  }
+
+  /* ---------- 外部写入热重载（ADR-0010） ----------
+   * 监听目录而非文件：原子写用 rename 顶替文件，Windows 上盯被顶替的旧句柄会失明。
+   * 四条防线：① 自身防抖/落盘进行中 → 本轮放弃（用户的未落盘编辑优先，撞车规则）；
+   * ② 读不出或不是 JSON 对象 → 忽略不隔离（现场原地保留，留给启动恢复链处置）；
+   * ③ 内容与内存一致 → 跳过（这同时天然抑制自身落盘触发的监听回环）；
+   * ④ 校验通过 → 灌入 cache 并回调，由上层推送渲染层刷新。 */
+  async function reloadExternal(onExternal: (data: QinkData) => void): Promise<void> {
+    if (saveTimer || writing) return
+    const { dataFile } = paths()
+    const read = await readOne(dataFile)
+    if (read.kind !== 'ok') return
+    if (JSON.stringify(read.data) === JSON.stringify(cache)) return
+    cache = read.data
+    onExternal(cache)
+  }
+
+  function watchExternal(onExternal: (data: QinkData) => void): void {
+    const { dataFile } = paths()
+    try {
+      mkdirSync(dirname(dataFile), { recursive: true })
+      watcher = watch(dirname(dataFile), { persistent: false }, (_event, filename) => {
+        if (basename(String(filename ?? '')) !== basename(dataFile)) return
+        if (watchTimer) clearTimeout(watchTimer)
+        watchTimer = setTimeout(() => {
+          watchTimer = null
+          void reloadExternal(onExternal)
+        }, WATCH_DEBOUNCE_MS)
+      })
+      watcher.on('error', (err) => {
+        console.error('[qink] 数据文件监听失效（热重载停用，重启应用可恢复）:', err)
+        stopExternalWatch()
+      })
     } catch (err) {
-      // 主文件落盘失败不致命（内存态仍正确），下次任何 queueSave 会再试
-      console.error('[qink] 保存数据失败:', err)
+      console.error('[qink] 数据文件监听启动失败（热重载不可用，不影响其他功能）:', err)
     }
-    try {
-      await mkdir(dirname(backupFile), { recursive: true })
-      await writeFileAtomic(backupFile, json)
-    } catch {
-      // 备份失败静默：备份只是保险，不是主路径
+  }
+
+  function stopExternalWatch(): void {
+    if (watchTimer) {
+      clearTimeout(watchTimer)
+      watchTimer = null
     }
+    watcher?.close()
+    watcher = null
   }
 
   return {
@@ -195,6 +257,10 @@ export function createStore(paths: () => StorePaths): Store {
           console.error('[qink] 退出冲刷失败:', file, err)
         }
       }
-    }
+    },
+
+    watchExternal,
+
+    stopExternalWatch
   }
 }

@@ -47,6 +47,8 @@ declare global {
     onWinPos(cb: (x: number, y: number) => void): void
     /** 失焦收起通知：贴纸展开时点击窗口外 250ms 后触发（挂起期内托盘抬前已在主进程撤销） */
     onBlurCollapse(cb: () => void): void
+    /** 外部写入热重载（ADR-0010）：主进程推送外部修改后的全量数据。回调里只渲染、勿回写 */
+    onExternalData(cb: (data: QinkData) => void): void
   }
 
   interface Window {

@@ -14,7 +14,7 @@ import {
   windowWidthForForm,
   windowHeightFor
 } from '../shared/window'
-import { flushPendingSync, getData, loadData, queueSave, setData } from './store'
+import { flushPendingSync, getData, loadData, queueSave, setData, watchExternalData } from './store'
 import { diag, logDir } from './diag'
 import { TRAY_ICON_DATA_URL } from './tray-icon'
 import type { QinkData } from '../shared/dates'
@@ -69,6 +69,14 @@ if (!app.requestSingleInstanceLock()) {
     createWindow()
     createTray()
     wireIpc()
+
+    // 外部写入热重载（ADR-0010）：qink-tasks skill 等外部工具原子改 data.json 后
+    // 贴纸实时刷新，无需重启。撞车规则与回环抑制在 store-io；渲染层只换数据重渲染、
+    // 绝不回写（回写会触发监听形成「写→看→写」回环）
+    watchExternalData((next) => {
+      diag('external-reload', { tasks: next.tasks.length })
+      win?.webContents.send('qink:data:external', next)
+    })
 
     // 睡眠唤醒/锁屏解锁与显示器变化：透明窗在系统显示状态剧变后可能掉渲染或被移出屏外，
     // 轻推重合成 + 拉回工作区（现场「图标消失」的防御路径，事件本身也留痕供对时间线）

@@ -43,5 +43,10 @@ contextBridge.exposeInMainWorld('qink', {
   /** 失焦收起通知：贴纸展开时点击窗口外 250ms 后触发（挂起期内托盘抬前已在主进程撤销） */
   onBlurCollapse: (cb: () => void): void => {
     ipcRenderer.on('qink:blur-collapse', () => cb())
+  },
+  /** 外部写入热重载（ADR-0010）：主进程检测到 data.json 被外部修改后推全量数据；
+   *  渲染层只换数据源重渲染，绝不回写（防监听回环） */
+  onExternalData: (cb: (data: QinkData) => void): void => {
+    ipcRenderer.on('qink:data:external', (_e, data) => cb(data))
   }
 })
