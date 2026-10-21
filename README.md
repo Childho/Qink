@@ -14,8 +14,25 @@
 - **截止时间**：右键设定；剩余不足 24 小时自动置顶标红，逾期时悬浮球出现常亮裂缝
 - **空闲自动收起**：展开状态 10 分钟无交互，自动收成悬浮球，双击展开
 - **数据本地存储**：明文 JSON 存在「文档\Qink\」，无云端、无账号、无遥测
+- **AI 直写任务**（0.4.0+）：数据文件被外部修改时贴纸实时热重载——对 AI 说「把今天的清单写进 Qink」即可，见下节
 
 ![悬浮球形态](docs/screenshots/ball.png)
+
+## AI 集成：qink-tasks skill
+
+仓库内置项目级 skill `.agents/skills/qink-tasks/`，让 AI 编程助手（ZCode 等兼容 `.agents/skills` 约定的工具）直接读写你的任务与目标：
+
+- **写入即所见**：Qink 0.4.0+ 运行中，AI 写入 `文档\Qink\data.json` 后贴纸**无需重启实时刷新**（文件热重载，决策见 [ADR-0010](docs/adr/0010-external-write-hot-reload.md)）
+- **能力**：追加今日任务（支持截止时间/置顶）、查看当前清单、勾选完成、删除任务、设定季/月/周目标
+- **安全**：形状校验不过整批拒绝、原子写+双写备份、与 Qink 内部写入同构；破坏性操作（删除/替换）必须先向你确认
+- **手动使用**（不依赖特定 AI 工具）：
+
+```powershell
+node .agents/skills/qink-tasks/scripts/qink.mjs read
+node .agents/skills/qink-tasks/scripts/qink.mjs add '[{"text":"写周报","due":"15:30"}]'
+node .agents/skills/qink-tasks/scripts/qink.mjs complete '{"text":"写周报"}'
+node .agents/skills/qink-tasks/scripts/qink.mjs goal week '这一周，最重要的是______'
+```
 
 ## 安装
 
@@ -40,7 +57,7 @@ npm run package
 ```powershell
 npm install
 npm run dev        # 开发模式（改主进程/preload 需完全重启，渲染层热更新）
-npm test           # vitest，52 个单测
+npm test           # vitest，82 个单测
 npm run typecheck  # TypeScript 类型检查
 ```
 
@@ -59,7 +76,7 @@ tests/         vitest
 本项目采用 AI 结对开发，开发过程文档完整保留：
 
 - [CONTEXT.md](CONTEXT.md) — 领域术语表（便利贴 / 核心目标 / 翻篇 / 滚入任务……）
-- [docs/adr/](docs/adr/) — 8 篇架构决策记录（玻璃合成、阴影体系、自适应高度……）
+- [docs/adr/](docs/adr/) — 10 篇架构决策记录（玻璃合成、阴影体系、自适应高度、数据耐久、外部写入热重载……）
 - [docs/review/](docs/review/) — 5 篇全面代码审查（UX / 性能 / 代码质量 / 数据安全 / 测试工程化）
 - `.scratch/` — 各功能的 spec 与验收工件（截图、验证脚本、采样数据）
 - `tasks/` — 开发规划与里程碑笔记

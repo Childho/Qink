@@ -500,3 +500,28 @@ vitest 35/35 ✅（新增 mist 5 项）；typecheck ✅。dev 实机（Win10 256
 ### Review
 
 `npm test` 67/67、`npm run typecheck` 通过；双镜像配置下 `npm run package` 成功生成 Windows x64 安装包。`E:\下载\Qink-Setup-0.3.1.exe` SHA256 为 `6B236986195FB53D79D378FBBED47AAB6B526F287FB9272DA2C9A6F4C0750393`，与 `dist\Qink-Setup-0.3.1.exe` 一致。静默安装退出码 0；`%LOCALAPPDATA%\Programs\Qink\Qink.exe` 版本为 `0.3.1.0`，安装后启动成功。
+
+## 0.4.0 · 外部写入热重载 + qink-tasks skill（2026-10-21）
+
+grilling 两轮共识（用户逐题确认）：AI 直写 data.json 通道 + Qink 热重载感知；skill 全功能（读/加任务含 dueAt/写季月周目标/勾完成/删任务）；追加+去重默认、破坏性操作两级确认；撞车规则「Qink 未落盘编辑优先」；skill 放 `.agents/skills/qink-tasks/`（git 可跟踪）；0.4.0 发 GitHub release。
+
+- [x] Qink 热重载：store-io 外部监听（目录级 fs.watch 过滤 data.json、250ms 防抖、内容相等跳过=回环抑制、防抖挂起时本轮放弃、坏 JSON 忽略不隔离）→ 主进程推送 `qink:data:external` → 渲染层换数据源 render()（不 persist）
+- [x] preload `onExternalData` + env.d.ts；diag `external-reload` 留痕
+- [x] tests/store.test.ts 新增监听用例（真实临时目录+真实定时器惯例）
+- [x] skill `.agents/skills/qink-tasks/`：SKILL.md + scripts（read/add/complete/delete/goal/replace；原子写复刻+双写备份+形状校验+去重+写入后核验重试；--yes 破坏性门槛）
+- [x] 纯函数奇偶校验测试：脚本内复刻的 dueAt/periodKey 算法 vs src/shared 源实现钉死一致
+- [x] 端到端 verify（内存种子，不碰用户数据）：外部写 → 渲染层 DOM 更新 → **由 dev 真机实测替代（见 Review），未另写 verify.cjs**
+- [x] dev 真机热重载实测（备份 data.json → 加标记任务 → qink.log external-reload 留痕 → 清理）
+- [x] 0.4.0 打包装机：asar 校验新通道、装机后活体实测（装机版运行中脚本写入 → 贴纸实时长任务）
+- [x] ADR-0010、README AI 集成节、progress/lessons/memory 同步
+- [x] git main 提交推送 + GitHub release v0.4.0（Setup + Portable 双包，代理 127.0.0.1:7897）+ 分发副本 `E:\下载`
+
+### Review（2026-10-21）
+
+**验证链**：typecheck 零错误 · vitest 82/82（67 旧 + 5 监听 + 10 奇偶）· skill 命令链隔离冒烟（add 去重/goal 周期键/complete/delete 无 --yes 拒绝 exit 2/--yes 放行）· **dev 真机**：贴纸展开态脚本直写 → qink.log `[external-reload] tasks:20` + 屏幕截图肉眼确认「热重载验证·AI直写」boot 渲染为紧急红置顶、「第二条实时验证」运行中实时长出为常规墨绿（视觉模型读图确认）· **装机版 0.4.0 生产终验**：运行中 add→delete 往返，两次 external-reload（20→19），数据 SHA **字节级零残留**，qinkRunning 探测正确。
+
+**实现要点**：监听目录而非文件（原子写 rename 顶替会晃掉文件句柄监听）；回环抑制用「内容与内存一致即跳过」天然达成，无需自写标志位；`writing` 标志防落盘进行中把旧内容灌回；skill 奇偶校验测试把复刻算法钉死在 src/shared 源实现上（改 shared 不同步 skill 会红）。
+
+**现场管理**：测试全程 data.json 事前备份（SHA 09ba29…）、事后主文件+AppData 备份双还原（三份 SHA 一致）、noteMode 用户偏好（ball）原样保留；dev 孤儿 electron 进程每轮清理；装机版 0.4.0 已重启运行。
+
+**已知边界**（ADR-0010 已录）：外部数据不弹提示（安静是产品性格，诊断在 qink.log）；skill 探测 Qink 运行按 Qink.exe（dev 的 electron.exe 不识别，只影响提示语不影响写入）；真撞车（300ms 窗口）外部写入丢一轮由脚本核验重试兜底。
