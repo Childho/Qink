@@ -12,3 +12,6 @@ dist/
 
 # ZCode 视频插件在本仓库的工作标记目录（非项目内容）
 .video_agent/
+
+# 热重载验证现场（含用户真实数据截图，仅存本地不入库）
+.scratch/hot-reload/
